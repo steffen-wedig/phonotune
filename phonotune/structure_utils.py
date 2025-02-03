@@ -7,10 +7,9 @@ from ase.visualize.plot import plot_atoms
 from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
-from pymatgen.io.cp2k.inputs import Cell, Coord, Cp2kInput
 
 
-def get_low_T_structure():
+def get_low_T_Ru2Sn3_structure():
     a = 12.344
     b = 9.922
     c = 6.161
@@ -35,13 +34,9 @@ def get_low_T_structure():
     return struct
 
 
-def get_high_T_structure():
-    return get_from_mp("mp-680677")
-
-
 def get_from_mp(material_id):
     yaml_file = "./api_key.yaml"
-    with open(yaml_file, "r") as f:
+    with open(yaml_file) as f:
         api_key = yaml.safe_load(f)["MP_API_KEY"]
 
     with MPRester(api_key) as m:
@@ -57,28 +52,28 @@ def plot_low_T(struct):
     return fig
 
 
-def to_ase(struct):
+def to_ase(struct) -> Atoms:
     ase_atoms = AseAtomsAdaptor().get_atoms(struct)
     return ase_atoms
 
 
-def local_relaxation(atoms: Atoms, calculator: calculator):
+def local_relaxation(
+    atoms: Atoms,
+    calculator: calculator,
+    rattle: float | None = None,
+    relaxation_tolerance: float = 0.01,
+):
     atoms.calc = calculator
-    # also relax the cell shape
-    # atoms.rattle(stdev=0.01)
+    # also relax the cell shape?
+    if rattle is not None:
+        atoms.rattle(stdev=rattle)
     opt = BFGS(atoms)
-    opt.run(fmax=0.000001)
+    opt.run(fmax=relaxation_tolerance)
 
     return atoms
 
 
-def to_cp2k(struct: Structure):
-    cell = Cell(struct.lattice)
-    coords = Coord(struct)
-    input_file = Cp2kInput()
-
-
 if __name__ == "__main__":
-    ase_atoms = get_low_T_structure()
+    ase_atoms = get_low_T_Ru2Sn3_structure()
     fig = plot_low_T(ase_atoms)
     fig.savefig("./structures/low_T.png")

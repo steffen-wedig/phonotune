@@ -4,3 +4,5 @@ structures
 mace_calculators
 __pycache__
 .ruff_cache
+phonopy_params.yaml
+phonopy_parameters
