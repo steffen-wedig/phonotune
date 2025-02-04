@@ -8,7 +8,7 @@ from phonotune.phonon_calculations import calculate_fc2_phonopy_set
 
 mat = Material(name="Mn4Si7", temperature="low")
 config = CalculationConfig(
-    calculator_type="MACE_MP_0", material=mat, relaxation_tolerance=0.001
+    calculator_type="MACE_OMAT", material=mat, relaxation_tolerance=0.001
 )
 
 setup = CalculationSetup(config)

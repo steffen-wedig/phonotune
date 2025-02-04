@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from ase import Atoms
 from ase.calculators import calculator
+from ase.calculators.castep import Castep
 from ase.spacegroup.symmetrize import check_symmetry
 from mace.calculators import MACECalculator
 
@@ -38,12 +39,24 @@ class CalculationSetup:
         match self.config.calculator_type:
             case "MACE_OMAT":
                 self.calculator = MACECalculator(
-                    model_path=MACE_PATH_OMAT, device="cuda"
+                    model_path=MACE_PATH_OMAT, device="cuda", enable_cueq=True
                 )
             case "MACE_MP_0":
-                self.calculator = MACECalculator(model_path=MACE_PATH_MP, device="cuda")
+                self.calculator = MACECalculator(
+                    model_path=MACE_PATH_MP, device="cuda", enable_cueq=True
+                )
             case "CASTEP":
-                raise NotImplementedError
+                calc = Castep()
+                calc._directory = "castep"
+                calc.param.xc_functional = "PBE"
+                calc.param.cut_off_energy = 550
+                calc.cell.kpoint_mp_grid = "4 4 2"
+                calc.cell.fix_com = False
+                calc.cell.fix_all_cell = True
+                calc.param.task = "SinglePoint"
+                calc.param.spin_polarised = True
+                self.calculator = calc
+
             case _:
                 raise ValueError("You did not choose a valid calculator type.")
 

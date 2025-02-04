@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
 from ase.calculators import calculator
-from ase.optimize import BFGS
+from ase.optimize import LBFGS
 from ase.visualize.plot import plot_atoms
 from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
@@ -67,7 +67,7 @@ def local_relaxation(
     # also relax the cell shape?
     if rattle is not None:
         atoms.rattle(stdev=rattle)
-    opt = BFGS(atoms)
+    opt = LBFGS(atoms)
     opt.run(fmax=relaxation_tolerance)
 
     return atoms

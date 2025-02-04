@@ -6,3 +6,5 @@ __pycache__
 .ruff_cache
 phonopy_params.yaml
 phonopy_parameters
+castep_keywords.json
+castep
