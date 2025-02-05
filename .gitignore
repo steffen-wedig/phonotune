@@ -1,6 +1,5 @@
 api_key.yaml
 phonon_bands
-structures
 mace_calculators
 __pycache__
 .ruff_cache

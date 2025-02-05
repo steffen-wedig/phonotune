@@ -15,6 +15,7 @@ setup = CalculationSetup(config)
 calculator = setup.get_calulator()
 atoms = setup.get_atoms()
 
+
 supercell_matrix = [[2, 0, 0], [0, 2, 0], [0, 0, 2]]
 phonon = aseatoms2phonopy(atoms, supercell_matrix)
 phonon.generate_displacements(distance=0.03)

@@ -1,8 +1,10 @@
 from dataclasses import dataclass
+from typing import Literal
 
 from ase import Atoms
 from ase.calculators import calculator
 from ase.calculators.castep import Castep
+from ase.io import read
 from ase.spacegroup.symmetrize import check_symmetry
 from mace.calculators import MACECalculator
 
@@ -12,10 +14,12 @@ MACE_MODELS_ROOT = "/data/fast-pc-04/snw30/projects/mace_models"
 MACE_PATH_OMAT = f"{MACE_MODELS_ROOT}/mace-omat-0-medium.model"
 MACE_PATH_MP = f"{MACE_MODELS_ROOT}/2023-12-03-mace-128-L1_epoch-199.model"
 
+type Mat = Literal["Mn4Si7", "Ru2Sn3"]
+
 
 @dataclass
 class Material:
-    name: str
+    name: Mat
     temperature: str
 
 
@@ -25,6 +29,7 @@ class CalculationConfig:
     material: Material
     relaxation_tolerance: float | None = None
     rattle: float | None = None
+    symmetry_tolerance: float = 1e-3
 
     @classmethod
     def from_yaml(cls, path: str):
@@ -78,17 +83,31 @@ class CalculationSetup:
                     struct = su.get_from_mp("mp-680677")
 
         atoms = su.to_ase(struct)
+        self.atoms = atoms
+        return atoms
 
-        sym_data_prior = check_symmetry(atoms, symprec=1e-3, verbose=True)
-
-        su.local_relaxation(
-            atoms, self.calculator, self.config.rattle, self.config.relaxation_tolerance
+    def relax_atoms(self):
+        sym_data_prior = check_symmetry(
+            self.atoms, symprec=self.config.symmetry_tolerance, verbose=True
         )
 
-        sym_data_post = check_symmetry(atoms, symprec=1e-3, verbose=True)
+        su.local_relaxation(
+            self.atoms,
+            self.calculator,
+            self.config.rattle,
+            self.config.relaxation_tolerance,
+        )
+
+        sym_data_post = check_symmetry(
+            self.atoms, symprec=self.config.symmetry_tolerance, verbose=True
+        )
 
         assert sym_data_prior.number == sym_data_post.number, AssertionError(
             "Broke symmetry through optimization or rattling"
         )
 
+        return self.atoms
+
+    def get_atoms_from_file(self, filename) -> Atoms:
+        atoms = read(filename)
         return atoms

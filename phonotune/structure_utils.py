@@ -67,7 +67,7 @@ def local_relaxation(
     # also relax the cell shape?
     if rattle is not None:
         atoms.rattle(stdev=rattle)
-    opt = LBFGS(atoms)
+    opt = LBFGS(atoms, logfile=None)
     opt.run(fmax=relaxation_tolerance)
 
     return atoms
