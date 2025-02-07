@@ -51,30 +51,31 @@ def extract_bands(data, N_bands):
     return bands
 
 
-def plot_phonon_bands(bands):
+def plot_phonon_bands(bands, ax: plt.Axes = None, color: str = "k"):
     """
     Plot the phonon bands.
 
     Parameters:
       bands : list of bands, where each band is a list of (distance, frequency) tuples.
     """
-    fig = plt.figure(figsize=(8, 6))
+
+    if ax is None:
+        fig, ax = plt.subplots(1)
+        fig.set_size_inches(8, 6)
 
     # Plot each band as a line.
     for band in bands:
         # Unzip the list of tuples into separate lists for distances and frequencies.
         distances, frequencies = zip(*band, strict=False)
-        plt.plot(distances, frequencies, c="k")
-
-    plt.xlabel("Distance")
-    plt.ylabel("Frequency in THz")
-    plt.title("Phonon Band Structure")
-    plt.tight_layout()
-    return fig
+        ax.plot(distances, frequencies, c=color)
+    return ax
 
 
 if __name__ == "__main__":
-    data = load_yaml_data("test.yaml")
+    data = load_yaml_data(
+        "/data/fast-pc-06/snw30/projects/phonons/phonotune/phonons/Mn4Si7_high_MACE_OMAT_bands.yaml"
+    )
     bands = extract_bands(data, 5)
-    fig = plot_phonon_bands(bands)
+    fig, ax = plt.subplots(1)
+    plot_phonon_bands(bands, ax)
     fig.savefig("testfig")
