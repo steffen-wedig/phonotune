@@ -1,13 +1,17 @@
 from dataclasses import dataclass
 
 import numpy as np
+from ase.symbols import symbols2numbers
+from mace.data.utils import Configuration
 
 from phonotune.alexandria.phonon_data import Displacement, PhononData
+
+type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 
 
 @dataclass
 class Structure:
-    atoms: list[str]
+    atom_symbols: list[str]
     positions: np.ndarray
     forces: np.ndarray
 
@@ -17,10 +21,10 @@ class PairConstructor:
         self.displacements = phonon_data.displacements
         self.supercell = phonon_data.supercell
 
-    def construct_all_pairs(self):
-        atom_types = self.supercell.atom_types
+    def construct_all_pairs(self) -> ConfigurationPairs:
+        atom_symbols = self.supercell.atom_symbols
         equilibrium_structure = self.supercell.get_positions()
-        structure_pairs: list[tuple[Structure, Structure] | None] = []
+        configuration_pairs: ConfigurationPairs = []
         number_of_displacements = len(self.displacements)
         i = 0
         while i < number_of_displacements:
@@ -36,21 +40,24 @@ class PairConstructor:
                 displacement1 = self.displacements[i].get_mirror()
                 i += 1
 
-            structure_pairs.append(
+            configuration_pairs.append(
                 PairConstructor.get_pair(
-                    atoms=atom_types,
+                    atom_symbols=atom_symbols,
                     eq_structure=equilibrium_structure,
                     displacement0=displacement0,
                     displacement1=displacement1,
                 )
             )
 
-        return structure_pairs
+        return configuration_pairs
 
     @staticmethod
     def get_pair(
-        atoms, eq_structure, displacement0: Displacement, displacement1: Displacement
-    ) -> tuple[Structure, Structure]:
+        atom_symbols,
+        eq_structure,
+        displacement0: Displacement,
+        displacement1: Displacement,
+    ) -> tuple[Configuration, Configuration]:
         pos0 = eq_structure
         pos1 = eq_structure
 
@@ -66,7 +73,28 @@ class PairConstructor:
             forces1 = displacement0.forces - 2 * (displacement0.forces @ normalized_d0)
             displacement1.forces = forces1
 
-        structure0 = Structure(atoms=atoms, positions=pos0, forces=displacement0.forces)
-        structure1 = Structure(atoms=atoms, positions=pos1, forces=displacement1.forces)
+        atom_numbers = symbols2numbers(atom_symbols)
 
-        return (structure0, structure1)
+        # TODO: Maybe calculate force loss weights here?
+
+        config0 = PairConstructor.get_mace_configuration(
+            atom_numbers=atom_numbers, positions=pos0, forces=displacement0.forces
+        )
+
+        config1 = PairConstructor.get_mace_configuration(
+            atom_numbers=atom_numbers, positions=pos1, forces=displacement1.forces
+        )
+
+        return (config0, config1)
+
+    @staticmethod
+    def get_mace_configuration(atom_numbers, positions, forces) -> Configuration:
+        properties = {"forces": forces}
+        configuration = Configuration(
+            atomic_numbers=atom_numbers,
+            positions=positions,
+            properties=properties,
+            property_weights={"forces": 1.0},
+            # property_weights #TODO: define loss weight here! But on the otherhand, the loss weight depends on two configurations.
+        )
+        return configuration

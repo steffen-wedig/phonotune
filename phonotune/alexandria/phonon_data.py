@@ -45,22 +45,22 @@ class Properties:
 class Supercell:
     lattice: np.ndarray
     fractional_coordinates: np.ndarray
-    atom_types: list[str]
+    atom_symbols: list[str]
 
     @classmethod
     def from_lattice_and_points(cls, lattice, points):
         N_atoms = len(points)
         frac_coordinates = np.zeros(shape=(N_atoms, 3))
-        atom_types = []
+        atom_symbols = []
 
         for idx, p in enumerate(points):
             frac_coordinates[idx, :] = p["coordinates"]
-            atom_types.append(p["symbol"])
+            atom_symbols.append(p["symbol"])
 
         return cls(
             lattice=lattice,
             fractional_coordinates=frac_coordinates,
-            atom_types=atom_types,
+            atom_symbols=atom_symbols,
         )
 
     def get_positions(self):
@@ -108,7 +108,7 @@ class PhononData:
 
     def get_ase_atoms_from_supercell(self):
         a = Atoms(
-            symbols=self.supercell.atom_types,
+            symbols=self.supercell.atom_symbols,
             scaled_positions=self.supercell.fractional_coordinates,
             cell=self.supercell.lattice,
             pbc=True,
