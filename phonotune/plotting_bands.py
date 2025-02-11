@@ -45,7 +45,7 @@ def extract_bands(data, N_bands):
         for i, band in enumerate(band_list[:N_bands]):
             freq = band.get("frequency", None)
             if freq is None:
-                raise ValueError(f"Missing 'frequency' in band {i+1} at distance {d}")
+                raise ValueError(f"Missing 'frequency' in band {i + 1} at distance {d}")
             bands[i].append((d, freq))
 
     return bands
