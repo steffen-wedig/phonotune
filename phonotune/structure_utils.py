@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
 from ase.calculators import calculator
-from ase.optimize import LBFGS
+from ase.filters import FrechetCellFilter
+from ase.optimize import FIRE, LBFGS
 from ase.visualize.plot import plot_atoms
 from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
@@ -57,7 +58,7 @@ def to_ase(struct) -> Atoms:
     return ase_atoms
 
 
-def local_relaxation(
+def local_lbfgs_relaxation(
     atoms: Atoms,
     calculator: calculator,
     rattle: float | None = None,
@@ -71,6 +72,15 @@ def local_relaxation(
     opt.run(fmax=relaxation_tolerance)
 
     return atoms
+
+
+def local_fire_relaxation(
+    atoms: Atoms, calculator: calculator, relaxation_tolerance: float = 0.005
+):
+    atoms.calc = calculator
+    sym_filter = FrechetCellFilter(atoms)
+    opt = FIRE(sym_filter)
+    opt.run(fmax=relaxation_tolerance)
 
 
 if __name__ == "__main__":
