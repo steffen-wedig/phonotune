@@ -1,5 +1,6 @@
 import bz2
 import json
+import os
 
 import requests
 import yaml
@@ -23,6 +24,8 @@ def download_and_unpack_phonons(mp_id):
 
 
 def to_yaml(data, mp_id):
+    if not os.path.isdir("data"):
+        os.mkdir("data")
     yaml.dump(data, open(f"data/{mp_id}.yaml", "w"))
 
 
