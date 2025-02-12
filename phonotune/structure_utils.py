@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
-from ase.calculators import calculator
+from ase.calculators.calculator import Calculator
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE, LBFGS
 from ase.visualize.plot import plot_atoms
@@ -60,7 +60,7 @@ def to_ase(struct) -> Atoms:
 
 def local_lbfgs_relaxation(
     atoms: Atoms,
-    calculator: calculator,
+    calculator: Calculator,
     rattle: float | None = None,
     relaxation_tolerance: float = 0.01,
 ):
@@ -75,11 +75,11 @@ def local_lbfgs_relaxation(
 
 
 def local_fire_relaxation(
-    atoms: Atoms, calculator: calculator, relaxation_tolerance: float = 0.005
+    atoms: Atoms, calculator: Calculator, relaxation_tolerance: float = 0.005
 ):
     atoms.calc = calculator
     sym_filter = FrechetCellFilter(atoms)
-    opt = FIRE(sym_filter)
+    opt = FIRE(sym_filter, logfile="/dev/null")
     opt.run(fmax=relaxation_tolerance)
 
 

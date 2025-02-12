@@ -51,7 +51,7 @@ def extract_bands(data, N_bands):
     return bands
 
 
-def plot_phonon_bands(bands, ax: plt.Axes = None, color: str = "k"):
+def plot_phonon_bands(bands, ax: plt.Axes | None = None, color: str = "k"):
     """
     Plot the phonon bands.
 

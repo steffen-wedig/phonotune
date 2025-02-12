@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from ase import Atoms
-from ase.calculators import calculator
+from ase.calculators.calculator import Calculator
 from ase.calculators.castep import Castep
 from ase.io import read
 from ase.spacegroup.symmetrize import check_symmetry
@@ -40,7 +40,7 @@ class CalculationSetup:
     def __init__(self, config: CalculationConfig):
         self.config = config
 
-    def get_calulator(self) -> calculator:
+    def get_calulator(self) -> Calculator:
         match self.config.calculator_type:
             case "MACE_OMAT":
                 self.calculator = MACECalculator(
@@ -108,6 +108,6 @@ class CalculationSetup:
 
         return self.atoms
 
-    def get_atoms_from_file(self, filename) -> Atoms:
+    def get_atoms_from_file(self, filename) -> Atoms | list[Atoms]:
         atoms = read(filename)
         return atoms
