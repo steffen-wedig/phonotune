@@ -1,10 +1,15 @@
+import h5py
 from mace.calculators import mace_mp
+from mace.data.hdf5_dataset import MultiConfigHDF5Dataset
 from mace.data.utils import Configuration
 from mace.modules.loss import force_difference_mse_error
 from mace.tools import get_atomic_number_table_from_zs
 from mace.tools.torch_geometric.dataloader import DataLoader
 
-from phonotune.alexandria.pair_constructor import PairConstructor, PairDataset
+from phonotune.alexandria.pair_constructor import (
+    PairConstructor,
+    save_config_sequence_as_HDF5,
+)
 from phonotune.alexandria.phonon_data import PhononData
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
@@ -27,8 +32,18 @@ def main():
     )  # TODO: Make this nicer
 
     cutoff = 5.0
-    pair_dataset = PairDataset.from_configurations(
-        configs=pairs, z_table=z_table, cutoff=cutoff
+
+    # Create the HDF5 dataset form the config pairs
+    ##open hdf5 file
+    with h5py.File("data/mace_multiconfig.hdf5", "w") as h5_file:
+        save_config_sequence_as_HDF5(pairs, h5_file=h5_file)
+    # Reload the HDF5 datset using the MultiConfigHDF5Dataset
+
+    pair_dataset = MultiConfigHDF5Dataset(
+        file_path="data/mace_multiconfig.hdf5",
+        r_max=cutoff,
+        z_table=z_table,
+        config_seq_length=2,
     )
 
     device = "cuda"
