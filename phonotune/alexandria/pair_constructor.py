@@ -2,7 +2,8 @@ import numpy as np
 from ase.symbols import symbols2numbers
 from mace.data.atomic_data import AtomicData
 from mace.data.utils import Configuration
-from mace.tools import AtomicNumberTable, get_atomic_number_table_from_zs
+from mace.tools import AtomicNumberTable
+from mace.tools.torch_geometric.data import DataSequence
 
 from phonotune.alexandria.phonon_data import Displacement, PhononData
 
@@ -119,39 +120,33 @@ class PairDataset:
                 config1, z_table=z_table, cutoff=cutoff
             )
 
-            data.append((atomic_data0, atomic_data1))
+            data.append(DataSequence(seq=(atomic_data0, atomic_data1)))
 
         return cls(data=data)
 
 
-def main():
-    mp_id = "mp-556756"
-    data = PhononData.load_phonon_data(
-        mp_id
-    )  # Load the Phonon Data, which reutrns a list of displacements and equilibirum structures
-    pc = PairConstructor(
-        data
-    )  # This converts a list of single-atom displacements into a tuple of configuration pairs. The pairs of configurations
-    pairs = pc.construct_all_pairs()
+def save_config_sequence_as_HDF5(data: list[tuple[Configuration, ...]], h5_file):
+    grp = h5_file.create_group("config_batch_0")
+    for sequence_idx, sequence in enumerate(data):
+        subgroup_name = f"sequence_{sequence_idx}"
+        seq_subgroup = grp.create_group(subgroup_name)
 
-    z_table = get_atomic_number_table_from_zs(
-        symbols2numbers(data.supercell.atom_symbols)
-    )  # TODO: Make this nicer
-
-    cutoff = 5.0
-    pair_dataset = PairDataset.from_configurations(
-        configs=pairs, z_table=z_table, cutoff=cutoff
-    )
-
-    from mace.tools.torch_geometric.dataloader import DataLoader
-
-    dl = DataLoader(
-        pair_dataset, batch_size=10
-    )  # This dataloader should return a pair of batches.
-
-    for batch in dl:
-        print(batch[0], batch[1])
+        for config_idx, config in enumerate(sequence):
+            config_subgroup_name = f"config_{config_idx}"
+            config_subgroup = seq_subgroup.create_group(config_subgroup_name)
+            config_subgroup["atomic_numbers"] = write_value(config.atomic_numbers)
+            config_subgroup["positions"] = write_value(config.positions)
+            properties_subgrp = config_subgroup.create_group("properties")
+            for key, value in config.properties.items():
+                properties_subgrp[key] = write_value(value)
+            config_subgroup["cell"] = write_value(config.cell)
+            config_subgroup["pbc"] = write_value(config.pbc)
+            config_subgroup["weight"] = write_value(config.weight)
+            weights_subgrp = config_subgroup.create_group("property_weights")
+            for key, value in config.property_weights.items():
+                weights_subgrp[key] = write_value(value)
+            config_subgroup["config_type"] = write_value(config.config_type)
 
 
-if __name__ == "__main__":
-    main()
+def write_value(value):
+    return value if value is not None else "None"
