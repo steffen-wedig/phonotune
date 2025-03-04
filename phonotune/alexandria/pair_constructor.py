@@ -1,3 +1,7 @@
+import math
+from collections.abc import Sequence
+
+import h5py
 import numpy as np
 from ase.symbols import symbols2numbers
 from mace.data.atomic_data import AtomicData
@@ -66,7 +70,13 @@ class PairConstructor:
             normalized_d0 = displacement0.displacement / np.linalg.norm(
                 displacement0.displacement
             )
-            forces1 = displacement0.forces - 2 * (displacement0.forces @ normalized_d0)
+
+            forces1 = (
+                displacement0.forces
+                - 2
+                * (displacement0.forces @ normalized_d0).reshape(-1, 1)
+                * normalized_d0
+            )
             displacement1.forces = forces1
 
         atom_numbers = symbols2numbers(atom_symbols)
@@ -74,29 +84,39 @@ class PairConstructor:
         # TODO: Maybe calculate force loss weights here?
 
         config0 = PairConstructor.get_mace_configuration(
-            atom_numbers=atom_numbers, positions=pos0, forces=displacement0.forces
+            atom_numbers=atom_numbers,
+            positions=pos0,
+            forces=displacement0.forces,
+            cell=displacement0.cell,
         )
 
         config1 = PairConstructor.get_mace_configuration(
-            atom_numbers=atom_numbers, positions=pos1, forces=displacement1.forces
+            atom_numbers=atom_numbers,
+            positions=pos1,
+            forces=displacement1.forces,
+            cell=displacement1.cell,
         )
 
         return (config0, config1)
 
     @staticmethod
-    def get_mace_configuration(atom_numbers, positions, forces) -> Configuration:
+    def get_mace_configuration(atom_numbers, positions, forces, cell) -> Configuration:
         properties = {"forces": forces}
         configuration = Configuration(
             atomic_numbers=atom_numbers,
             positions=positions,
+            cell=cell,
             properties=properties,
             property_weights={"forces": 1.0},
+            pbc=(True, True, True),
             # property_weights #TODO: define loss weight here! But on the otherhand, the loss weight depends on two configurations.
         )
         return configuration
 
 
 class PairDataset:
+    # Deprecated, use the configSequence instead
+
     def __init__(self, data: list[tuple[AtomicData, AtomicData]]):
         self.data = data
 
@@ -125,27 +145,59 @@ class PairDataset:
         return cls(data=data)
 
 
-def save_config_sequence_as_HDF5(data: list[tuple[Configuration, ...]], h5_file):
-    grp = h5_file.create_group("config_batch_0")
-    for sequence_idx, sequence in enumerate(data):
-        subgroup_name = f"sequence_{sequence_idx}"
-        seq_subgroup = grp.create_group(subgroup_name)
+class ConfigSequence:
+    def __init__(self, data: list[tuple[Configuration, ...]]):
+        self.data = data
 
-        for config_idx, config in enumerate(sequence):
-            config_subgroup_name = f"config_{config_idx}"
-            config_subgroup = seq_subgroup.create_group(config_subgroup_name)
-            config_subgroup["atomic_numbers"] = write_value(config.atomic_numbers)
-            config_subgroup["positions"] = write_value(config.positions)
-            properties_subgrp = config_subgroup.create_group("properties")
-            for key, value in config.properties.items():
-                properties_subgrp[key] = write_value(value)
-            config_subgroup["cell"] = write_value(config.cell)
-            config_subgroup["pbc"] = write_value(config.pbc)
-            config_subgroup["weight"] = write_value(config.weight)
-            weights_subgrp = config_subgroup.create_group("property_weights")
-            for key, value in config.property_weights.items():
-                weights_subgrp[key] = write_value(value)
-            config_subgroup["config_type"] = write_value(config.config_type)
+    def to_HDF5(self, h5_file):
+        with h5py.File(h5_file, "w") as f:
+            grp = f.create_group("config_batch_0")
+            for sequence_idx, sequence in enumerate(self.data):
+                subgroup_name = f"sequence_{sequence_idx}"
+                seq_subgroup = grp.create_group(subgroup_name)
+
+                for config_idx, config in enumerate(sequence):
+                    config_subgroup_name = f"config_{config_idx}"
+                    config_subgroup = seq_subgroup.create_group(config_subgroup_name)
+                    config_subgroup["atomic_numbers"] = write_value(
+                        config.atomic_numbers
+                    )
+                    config_subgroup["positions"] = write_value(config.positions)
+                    properties_subgrp = config_subgroup.create_group("properties")
+                    for key, value in config.properties.items():
+                        properties_subgrp[key] = write_value(value)
+                    config_subgroup["cell"] = write_value(config.cell)
+                    config_subgroup["pbc"] = write_value(config.pbc)
+                    config_subgroup["weight"] = write_value(config.weight)
+                    weights_subgrp = config_subgroup.create_group("property_weights")
+                    for key, value in config.property_weights.items():
+                        weights_subgrp[key] = write_value(value)
+                    config_subgroup["config_type"] = write_value(config.config_type)
+
+    def train_validation_split(
+        self, train_valid_ratio: float
+    ) -> tuple["ConfigSequence", "ConfigSequence"]:
+        # shuffle the data ???
+        split_index = math.floor(train_valid_ratio * len(self.data))
+
+        training_data = self.data[:split_index]
+        validation_data = self.data[split_index:]
+
+        return ConfigSequence(training_data), ConfigSequence(validation_data)
+
+    def get_splits(self, N_splits: Sequence[int]) -> tuple["ConfigSequence", ...]:
+        # shuffle???
+        splits = []
+        for i in N_splits:
+            split = self.data[:i]
+            splits.append(ConfigSequence(data=split))
+        return splits
+
+    def unroll(self):
+        unrolled_configs = []
+        for configs in self.data:
+            unrolled_configs.extend(configs)
+        return unrolled_configs
 
 
 def write_value(value):

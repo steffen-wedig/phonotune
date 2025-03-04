@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 
-class StructureIterator(ABC):
+class MaterialsIterator(ABC):
     @abstractmethod
     def __iter__(self):
         pass
@@ -11,7 +11,7 @@ class StructureIterator(ABC):
         pass
 
 
-class FileStructureIterator(StructureIterator):
+class FileMaterialsIterator(MaterialsIterator):
     def __init__(self, file_path):
         self.file = open(file_path)
         self.buffer = []
@@ -39,9 +39,9 @@ class FileStructureIterator(StructureIterator):
         self.close()
 
 
-class ListStructureIterator(StructureIterator):
-    def __init__(self, structure_list):
-        self.iterator = iter(structure_list)
+class ListMaterialsIterator(MaterialsIterator):
+    def __init__(self, materials_list):
+        self.iterator = iter(materials_list)
 
     def __iter__(self):
         return self

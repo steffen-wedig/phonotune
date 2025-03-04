@@ -1,10 +1,15 @@
+from collections.abc import Sequence
+
 import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
 from ase.calculators.calculator import Calculator
+from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
+from ase.io.extxyz import write_extxyz
 from ase.optimize import FIRE, LBFGS
 from ase.visualize.plot import plot_atoms
+from mace.data.atomic_data import Configuration
 from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
@@ -75,15 +80,62 @@ def local_lbfgs_relaxation(
 
 
 def local_fire_relaxation(
-    atoms: Atoms, calculator: Calculator, relaxation_tolerance: float = 0.005
+    atoms: Atoms,
+    calculator: Calculator,
+    relaxation_tolerance: float = 0.005,
+    N_max_steps=1000,
 ):
     atoms.calc = calculator
+    atoms.set_constraint(FixSymmetry(atoms))
     sym_filter = FrechetCellFilter(atoms)
     opt = FIRE(sym_filter, logfile="/dev/null")
-    opt.run(fmax=relaxation_tolerance)
+    converged = opt.run(fmax=relaxation_tolerance, steps=N_max_steps)
+
+    if not converged:
+        print(f"Not Converged in {N_max_steps} steps")
+        raise ValueError
 
 
-if __name__ == "__main__":
-    ase_atoms = get_low_T_Ru2Sn3_structure()
-    fig = plot_low_T(ase_atoms)
-    fig.savefig("./structures/low_T.png")
+def unitcell_fire_relaxation(
+    unitcell, calculator: Calculator, relaxation_tolerance=0.005, N_max_steps=1000
+):
+    atoms: Atoms = unitcell.to_ase_atoms()
+    try:
+        local_fire_relaxation(atoms, calculator, relaxation_tolerance, N_max_steps)
+        # Overwrite the field in the unitcell
+        unitcell.fractional_coordinates = atoms.get_scaled_positions()
+        unitcell.lattice = atoms.get_cell()
+    except ValueError:
+        raise
+
+    return unitcell
+
+
+def convert_configuration_to_ase(configuration: Configuration, calc) -> Atoms:
+    atoms = Atoms(
+        numbers=configuration.atomic_numbers,
+        positions=configuration.positions,
+        cell=configuration.cell,
+        pbc=configuration.pbc,
+    )
+    atoms.calc = calc
+
+    energy = atoms.get_potential_energy()
+    atoms.calc = None
+
+    atoms.set_array("DFT_forces", configuration.properties["forces"])
+    atoms.info["MACE_energy"] = energy
+    return atoms
+
+
+def configurations_to_xyz(xyz_file_path: str, configs: Sequence[Configuration], calc):
+    ase_atoms = []
+
+    for config in configs:
+        atoms = convert_configuration_to_ase(config, calc)
+        ase_atoms.append(atoms)
+
+    f = open(xyz_file_path, "w")
+    write_extxyz(
+        f, ase_atoms, columns=["symbols", "positions", "DFT_forces"], write_info=True
+    )

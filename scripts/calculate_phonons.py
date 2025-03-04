@@ -1,4 +1,3 @@
-import phonopy
 from ase.io import write
 from phonopy.phonon.band_structure import get_band_qpoints_and_path_connections
 
@@ -8,7 +7,7 @@ from phonotune.calculation_configuration import (
     Material,
 )
 from phonotune.helper_functions import aseatoms2phonopy
-from phonotune.phonon_calculations import calculate_fc2_phonopy_set
+from phonotune.phonon_calculations import calculate_forces_phonopy_set
 
 mat = Material(name="Mn4Si7", temperature="low")
 config = CalculationConfig(
@@ -54,10 +53,10 @@ for clc in ["MACE_OMAT", "MACE_MP_0"]:
             phonon = aseatoms2phonopy(atoms, supercell_matrix)
             phonon.generate_displacements(distance=0.03)
             supercells = phonon.supercells_with_displacements
-            force_set = calculate_fc2_phonopy_set(phonon, calculator)
-            phonon.save(filename=f"{runname}_phonons.yaml")
+            force_set = calculate_forces_phonopy_set(phonon, calculator)
+            phonon.produce_force_constants()
+            phonon.symmetrize_force_constants()
 
-            phonon = phonopy.load(f"{runname}_phonons.yaml")
             path = [[[0, 0, 0], [0.5, 0, 0.5]]]
             labels = ["$\\Gamma$", "X"]  # , "U", "K", "$\\Gamma$", "L", "W"]
             qpoints, connections = get_band_qpoints_and_path_connections(

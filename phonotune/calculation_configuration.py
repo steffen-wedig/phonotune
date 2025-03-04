@@ -44,7 +44,10 @@ class CalculationSetup:
         match self.config.calculator_type:
             case "MACE_OMAT":
                 self.calculator = MACECalculator(
-                    model_path=MACE_PATH_OMAT, device="cuda", enable_cueq=True
+                    model_path=MACE_PATH_OMAT,
+                    device="cuda",
+                    enable_cueq=True,
+                    head="default",
                 )
             case "MACE_MP_0":
                 self.calculator = MACECalculator(
@@ -91,7 +94,7 @@ class CalculationSetup:
             self.atoms, symprec=self.config.symmetry_tolerance, verbose=True
         )
 
-        su.local_relaxation(
+        su.local_lbfgs_relaxation(
             self.atoms,
             self.calculator,
             self.config.rattle,

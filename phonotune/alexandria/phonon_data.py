@@ -1,20 +1,15 @@
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-import h5py
 import numpy as np
-from ase import Atoms
-from ase.data import chemical_symbols
-from ase.symbols import symbols2numbers
+from ase.build import make_supercell
 from mace.calculators import MACECalculator
-from tqdm import tqdm
 
-from phonotune.alexandria.data_utils import (
-    download_and_unpack_phonons,
-    from_yaml,
-    to_yaml,
-)
-from phonotune.structure_utils import local_fire_relaxation
+from phonotune.alexandria.crystal_structures import Supercell, Unitcell
+from phonotune.alexandria.data_utils import open_data
+from phonotune.alexandria.materials_iterator import MaterialsIterator
+from phonotune.alexandria.structure_datasets import UnitcellDataset
+from phonotune.phonon_calculations import calculate_forces_phonopy_set
 
 
 @dataclass
@@ -22,6 +17,7 @@ class Displacement:
     atom: int
     displacement: np.ndarray
     forces: np.ndarray | None
+    cell: np.ndarray | None
 
     def is_mirrored(self, other: "Displacement", tol: float = 1e-8) -> bool:
         # First, ensure that we're comparing displacements for the same atom.
@@ -35,6 +31,7 @@ class Displacement:
         return cls(
             atom=existing_displacement.atom,
             displacement=-1.0 * existing_displacement.displacement,
+            cell=existing_displacement.cell,
             forces=None,
         )
 
@@ -46,46 +43,8 @@ class Properties:
     free_energy: np.float64
     heat_capacity: np.float64
     volume: np.float64
-
-
-@dataclass
-class Supercell:
-    lattice: np.ndarray
-    fractional_coordinates: np.ndarray
-    atom_symbols: list[str]
-    mp_id: str
-
-    @classmethod
-    def from_lattice_and_points(cls, mp_id, lattice, points):
-        N_atoms = len(points)
-        frac_coordinates = np.zeros(shape=(N_atoms, 3))
-        atom_symbols = []
-
-        for idx, p in enumerate(points):
-            frac_coordinates[idx, :] = p["coordinates"]
-            atom_symbols.append(p["symbol"])
-
-        return cls(
-            lattice=lattice,
-            fractional_coordinates=frac_coordinates,
-            atom_symbols=atom_symbols,
-            mp_id=mp_id,
-        )
-
-    def get_positions(self):
-        # Multiply fractional coordinates by the lattice matrix. (row vectors are lattice vectors)
-        # This converts fractional coordinates (relative units) into Cartesian coordinates.
-        return self.fractional_coordinates @ self.lattice
-
-    def to_ase_atoms(self) -> Atoms:
-        atoms = Atoms(
-            symbols=self.atom_symbols,
-            scaled_positions=self.fractional_coordinates,
-            cell=self.lattice,
-            pbc=True,
-        )
-
-        return atoms
+    temperatures: list
+    N_atoms_unitcell: int
 
 
 @dataclass
@@ -94,15 +53,13 @@ class PhononData:
     properties: Properties
     supercell: Supercell
     mp_id: str
+    phonon_spectrum: dict | None
+    calculation_source: str
 
     @classmethod
     def load_phonon_data(cls, mp_id):
         # Loads the phonon data either from file or by downloading from the Alexandria website
-        try:
-            data = from_yaml(mp_id)
-        except FileNotFoundError:
-            data = download_and_unpack_phonons(mp_id)
-            to_yaml(data, mp_id)
+        data = open_data(mp_id)
 
         supercell = Supercell.from_lattice_and_points(
             mp_id=mp_id,
@@ -114,6 +71,7 @@ class PhononData:
                 atom=disp["atom"],
                 displacement=np.array(disp["displacement"], dtype=np.float64),
                 forces=np.array(disp["forces"], dtype=np.float64),
+                cell=data["supercell"]["lattice"],
             )
             for disp in data["displacements"]
         ]
@@ -123,101 +81,141 @@ class PhononData:
             free_energy=data["free_e"],
             heat_capacity=data["heat_capacity"],
             volume=data["volume"],
+            temperatures=[0.0, 75.0, 150.0, 300.0, 600.0],
+            N_atoms_unitcell=len(data["unit_cell"]["points"]),
         )
 
-        return cls(displacements, properties, supercell, mp_id)
+        phonon_spectrum = {"frequencies": data["phonon_freq"]}
+
+        return cls(
+            displacements=displacements,
+            properties=properties,
+            supercell=supercell,
+            mp_id=mp_id,
+            phonon_spectrum=phonon_spectrum,
+            calculation_source="alexandria",
+        )
 
     @classmethod
-    def calculate_phonon_data_from_supercell(
-        cls, supercell: Supercell, mace_calculator: MACECalculator, phonon_data_config
+    def calculate_phonon_data_from_unitcell(
+        cls, unitcell: Unitcell, mace_calculator: MACECalculator
     ):
+        phonon = unitcell.to_phonopy()  # Creates the supercells required for phonopy
+
+        # phonon calculations
+
+        phonon.generate_displacements(distance=0.03)
+
+        _ = phonon.supercells_with_displacements
+        _ = calculate_forces_phonopy_set(phonon, mace_calculator)
+
+        phonon.produce_force_constants()
+        phonon.symmetrize_force_constants()
+        phonon.run_mesh(
+            np.diag(unitcell.phonon_calc_supercell),
+            is_gamma_center=True,
+            is_mesh_symmetry=False,
+        )
+        mesh_dict = phonon.get_mesh_dict()
+
+        temperatures = [0.0, 75.0, 150.0, 300.0, 600.0]
+        phonon.run_thermal_properties(temperatures=temperatures)
+        tp_dict = phonon.get_thermal_properties_dict()
+
+        ase_atoms = unitcell.to_ase_atoms()
+        unitcell_volume = ase_atoms.get_volume()
+        ase_supercell = make_supercell(ase_atoms, P=unitcell.phonon_calc_supercell)
+        # Parse the phonopy.dataset into displacements
+        displacements = [
+            Displacement(
+                atom=i["number"],
+                displacement=i["displacement"],
+                forces=i["forces"],
+                cell=ase_supercell.cell,
+            )
+            for i in phonon.dataset["first_atoms"]
+        ]
+
+        # Stack the unitcell
+
+        mp_id = unitcell.mp_id
+        supercell = Supercell(
+            lattice=ase_supercell.cell,
+            fractional_coordinates=ase_supercell.get_scaled_positions(),
+            atom_symbols=ase_supercell.get_chemical_symbols(),
+            mp_id=mp_id,
+        )
+
+        energy = mace_calculator.get_potential_energy(ase_atoms)
+
+        properties = Properties(
+            volume=unitcell_volume,
+            energy=energy,
+            N_atoms_unitcell=len(unitcell.atom_symbols),
+            **tp_dict,
+        )
+
+        return cls(
+            displacements=displacements,
+            properties=properties,
+            supercell=supercell,
+            mp_id=mp_id,
+            phonon_spectrum=mesh_dict,
+            calculation_source=str(mace_calculator.name),
+        )
+
+        # calculate properties
+
+
+class PhononDataset:
+    def __init__(self, phonon_data_samples: Iterable[PhononData]):
+        self.phonon_data_samples = phonon_data_samples
+
+    @classmethod
+    def load_phonon_dataset(cls, materials_iterator: MaterialsIterator, N_materials):
+        count = 0
+
+        phonon_data_samples = []
+        while count < N_materials:
+            mp_id = next(materials_iterator)
+            new_phonon_data = PhononData.load_phonon_data(mp_id)
+            phonon_data_samples.append(new_phonon_data)
+            count += 1
+
+        return cls(phonon_data_samples=phonon_data_samples)
+
+    def to_hdf5():
         pass
 
-
-@dataclass
-class SupercellDataset:
-    """
-    This class should load some structures from the alexandria dataset and make them available for analysis.
-    """
-
-    supercells: Iterable[Supercell]
-
     @classmethod
-    def from_alexandria(cls, mp_id_iterator: Iterable, N_structures: int):
-        supercells = []
-        count = 0
-        while count < N_structures:
-            mp_id = next(mp_id_iterator)
-            try:
-                data = from_yaml(mp_id)
-            except FileNotFoundError:
-                data = download_and_unpack_phonons(mp_id)
-                to_yaml(data, mp_id)
+    def compute_phonon_dataset_from_unit_cell_dataset(
+        cls, unitcell_dataset: UnitcellDataset, mace_calculator: MACECalculator
+    ):
+        phonon_data_samples = []
+        for unitcell in unitcell_dataset.unitcells:
+            phonon_data = PhononData.calculate_phonon_data_from_unitcell(
+                unitcell, mace_calculator
+            )
+            phonon_data_samples.append(phonon_data)
 
-            supercell = Supercell.from_lattice_and_points(
-                mp_id=mp_id,
-                lattice=data["supercell"]["lattice"],
-                points=data["supercell"]["points"],
+        return cls(phonon_data_samples)
+
+    def get_mp_ids(self):
+        mp_ids = []
+
+        for data in self.phonon_data_samples:
+            mp_ids.append(data.mp_id)
+        return mp_ids
+
+    def get_source(self):
+        sources = []
+
+        for data in self.phonon_data_samples:
+            sources.append(data.calculation_source)
+
+        if len(set(sources)) != 1:
+            raise ValueError(
+                "The Phonon Dataset contains values from multiple distinct calculators, which is not the intended behaviour"
             )
 
-            supercells.append(supercell)
-            count = count + 1
-
-        return cls(supercells=supercells)
-
-    def to_hdf5(self, hdf5_file_path):
-        "Converts the supercells to hdf5 storage"
-
-        with h5py.File(hdf5_file_path, "w") as f:
-            grp = f.create_group("supercells")
-            for supercell in self.supercells:
-                subgrp = grp.create_group(name=supercell.mp_id)
-                subgrp["frac_positions"] = supercell.fractional_coordinates
-                subgrp["atomic_numbers"] = symbols2numbers(supercell.atom_symbols)
-                subgrp["lattice"] = supercell.lattice
-
-    @classmethod
-    def from_hdf5(cls, hdf5_file_path: str):
-        "Load from a stored hdf5 file"
-
-        supercells = []
-        with h5py.File(hdf5_file_path, "r") as f:
-            grp = f["supercells"]
-            for name in grp:
-                frac_positions = f[f"supercells/{name}/frac_positions"][()]
-                atomic_numbers = f[f"supercells/{name}/atomic_numbers"][()]
-                lattice = f[f"supercells/{name}/lattice"][()]
-
-                atomic_symbols = [chemical_symbols[num] for num in atomic_numbers]
-                supercells.append(
-                    Supercell(
-                        lattice=lattice,
-                        fractional_coordinates=frac_positions,
-                        atom_symbols=atomic_symbols,
-                        mp_id=name,
-                    )
-                )
-
-        return cls(supercells)
-
-    def filter_by_atom_symbols(self, atom_symbols: str):
-        new_supercells = []
-        for supercell in self.supercells:
-            # check if given atom symbols is in the
-            if atom_symbols in supercell.atom_symbols:
-                new_supercells.append(supercell)
-
-        # Overwrite the currently stored data
-        self.supercells = new_supercells
-
-        return new_supercells
-
-    def relax_all_atoms(self, mace_calculator: MACECalculator):
-        for supercell in tqdm(self.supercells):
-            atoms = supercell.to_ase_atoms()
-
-            local_fire_relaxation(atoms, mace_calculator)
-            # Overwrite the field in the supercell
-
-            supercell.fractional_coordinates = atoms.get_scaled_positions()
-            supercell.lattice = atoms.get_cell()
+        return sources[0]
