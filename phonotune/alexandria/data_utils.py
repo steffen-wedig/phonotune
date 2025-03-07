@@ -95,6 +95,8 @@ def search_highest_number_displacements(mat_iterator: MaterialsIterator):
         try:
             mp_id = next(mat_iterator)
             data = open_data(mp_id)
+            if np.allclose(np.array(data["supercell_matrix"]), np.eye(3)):
+                continue
             num_displacements = len(data["displacements"])
             if num_displacements > max_displacements:
                 print(num_displacements)

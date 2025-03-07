@@ -16,7 +16,7 @@ dependencies = [
     "cuequivariance==0.1.0",
     "cuequivariance-ops-torch-cu12==0.1.0",
     "torch>=2.5.1",
-    "pymatgen>=2025.1.24"
+    "pymatgen>=2025.1.9"
 ]
 
 

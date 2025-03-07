@@ -14,42 +14,130 @@ from phonotune.alexandria.phonon_data import Displacement, PhononData
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 
 
-class PairConstructor:
-    def __init__(self, phonon_data: PhononData):
-        self.displacements = phonon_data.displacements
-        self.supercell = phonon_data.supercell
+class ConfigFactory:
+    def __init__(self, phonon_data: list[PhononData]):
+        self.phonon_data_samples = phonon_data
 
     def construct_all_pairs(self) -> ConfigurationPairs:
-        atom_symbols = self.supercell.atom_symbols
-        equilibrium_structure = self.supercell.get_positions()
+        config_pairs_list = []
+
+        for pd in self.phonon_data_samples:
+            config_pairs, _ = self.construct_pair_per_phonon_data(pd)
+            config_pairs_list.extend(config_pairs)
+
+        return config_pairs_list
+
+    @staticmethod
+    def construct_pair_per_phonon_data(phonon_data: PhononData):
+        atom_symbols = phonon_data.supercell.atom_symbols
+        equilibrium_structure = phonon_data.supercell.get_positions()
+
         configuration_pairs: ConfigurationPairs = []
-        number_of_displacements = len(self.displacements)
+        number_of_displacements = len(phonon_data.displacements)
         i = 0
+
+        displacement_data = []
+
         while i < number_of_displacements:
-            if i + 1 < number_of_displacements and self.displacements[i].is_mirrored(
-                self.displacements[i + 1]
-            ):
-                displacement0 = self.displacements[i]
-                displacement1 = self.displacements[i + 1]
+            if i + 1 < number_of_displacements and phonon_data.displacements[
+                i
+            ].is_mirrored(phonon_data.displacements[i + 1]):
+                displacement0 = phonon_data.displacements[i]
+                displacement1 = phonon_data.displacements[i + 1]
+
                 i += 2  # Skip the next vector since we've already processed it.
             else:
                 # No mirror present; add v and its mirror.
-                displacement0 = self.displacements[i]
+                displacement0 = phonon_data.displacements[i]
                 displacement1 = Displacement.get_mirror(
-                    existing_displacement=self.displacements[i]
+                    existing_displacement=phonon_data.displacements[i]
                 )
                 i += 1
 
-            configuration_pairs.append(
-                PairConstructor.get_pair(
-                    atom_symbols=atom_symbols,
-                    eq_structure=equilibrium_structure,
-                    displacement0=displacement0,
-                    displacement1=displacement1,
-                )
+            (config1, config2), forces0, forces1 = ConfigFactory.get_pair(
+                atom_symbols=atom_symbols,
+                eq_structure=equilibrium_structure,
+                displacement0=displacement0,
+                displacement1=displacement1,
+            )
+            configuration_pairs.append((config1, config2))
+
+            displacement_data.append(
+                {
+                    "number": displacement0.atom,
+                    "displacement": displacement0.displacement,
+                    "forces": forces0,
+                }
+            )
+            displacement_data.append(
+                {
+                    "number": displacement1.atom,
+                    "displacement": displacement1.displacement,
+                    "forces": forces1,
+                }
             )
 
-        return configuration_pairs
+        displacement_dataset = {
+            "natoms": len(atom_symbols),
+            "first_atoms": displacement_data,
+        }
+
+        return configuration_pairs, displacement_dataset
+
+    def construct_all_single_configs(self):
+        config_list = []
+
+        for pd in self.phonon_data_samples:
+            configs, _ = self.construct_configs_per_phonon_data(pd)
+            config_list.extend(configs)
+
+        return config_list
+
+    @staticmethod
+    def construct_configs_per_phonon_data(phonon_data: PhononData):
+        atom_symbols = phonon_data.supercell.atom_symbols
+        equilibrium_structure = phonon_data.supercell.get_positions()
+
+        configs = []
+
+        displacement_data = []
+
+        for disp in phonon_data.displacements:
+            config = ConfigFactory.convert_displacement_to_config(
+                equilibrium_structure, atom_symbols, disp
+            )
+            configs.append(config)
+
+            displacement_data.append(
+                {
+                    "number": disp.atom,
+                    "displacement": disp.displacement,
+                    "forces": disp.forces,
+                }
+            )
+
+        displacement_dataset = {
+            "natoms": len(atom_symbols),
+            "first_atoms": displacement_data,
+        }
+
+        return config, displacement_dataset
+
+    @staticmethod
+    def convert_displacement_to_config(
+        equilibrium_structure, atom_symbols, displacement: Displacement
+    ) -> Configuration:
+        position = equilibrium_structure.copy()
+        position[displacement.atom, :] += displacement.displacement
+
+        config = ConfigFactory.get_mace_configuration(
+            atom_numbers=symbols2numbers(atom_symbols),
+            positions=position,
+            forces=displacement.forces,
+            cell=displacement.cell,
+        )
+
+        return config
 
     @staticmethod
     def get_pair(
@@ -58,8 +146,8 @@ class PairConstructor:
         displacement0: Displacement,
         displacement1: Displacement,
     ) -> tuple[Configuration, Configuration]:
-        pos0 = eq_structure
-        pos1 = eq_structure
+        pos0 = eq_structure.copy()
+        pos1 = eq_structure.copy()
 
         pos0[displacement0.atom, :] += displacement0.displacement
         pos1[displacement1.atom, :] += displacement1.displacement
@@ -83,31 +171,31 @@ class PairConstructor:
 
         # TODO: Maybe calculate force loss weights here?
 
-        config0 = PairConstructor.get_mace_configuration(
+        config0 = ConfigFactory.get_mace_configuration(
             atom_numbers=atom_numbers,
             positions=pos0,
             forces=displacement0.forces,
             cell=displacement0.cell,
         )
 
-        config1 = PairConstructor.get_mace_configuration(
+        config1 = ConfigFactory.get_mace_configuration(
             atom_numbers=atom_numbers,
             positions=pos1,
             forces=displacement1.forces,
             cell=displacement1.cell,
         )
 
-        return (config0, config1)
+        return (config0, config1), displacement0.forces, displacement1.forces
 
     @staticmethod
     def get_mace_configuration(atom_numbers, positions, forces, cell) -> Configuration:
-        properties = {"forces": forces}
+        properties = {"DFT_forces": forces, "DFT_energy": 0.0}
         configuration = Configuration(
             atomic_numbers=atom_numbers,
             positions=positions,
             cell=cell,
             properties=properties,
-            property_weights={"forces": 1.0},
+            property_weights={"DFT_forces": 1.0, "DFT_energy": 0.0},
             pbc=(True, True, True),
             # property_weights #TODO: define loss weight here! But on the otherhand, the loss weight depends on two configurations.
         )
@@ -174,6 +262,59 @@ class ConfigSequence:
                         weights_subgrp[key] = write_value(value)
                     config_subgroup["config_type"] = write_value(config.config_type)
 
+    @classmethod
+    def from_HDF5(cls, h5_file):
+        data = []
+        with h5py.File(h5_file, "r") as f:
+            grp = f["config_batch_0"]
+            # Sort sequence groups by the numeric index extracted from their names.
+            sequence_keys = sorted(grp.keys(), key=lambda x: int(x.split("_")[1]))
+            for seq_key in sequence_keys:
+                seq_subgroup = grp[seq_key]
+                sequence_configs = []
+                # Similarly, sort configuration groups within each sequence.
+                config_keys = sorted(
+                    seq_subgroup.keys(), key=lambda x: int(x.split("_")[1])
+                )
+                for config_key in config_keys:
+                    config_subgroup = seq_subgroup[config_key]
+                    # Read each stored value using the corresponding read_value function.
+                    atomic_numbers = read_value(config_subgroup["atomic_numbers"][()])
+                    positions = read_value(config_subgroup["positions"][()])
+
+                    # Read properties stored in a subgroup.
+                    properties = {}
+                    properties_subgrp = config_subgroup["properties"]
+                    for key in properties_subgrp.keys():
+                        properties[key] = read_value(properties_subgrp[key][()])
+
+                    cell = read_value(config_subgroup["cell"][()])
+                    pbc = read_value(config_subgroup["pbc"][()])
+                    weight = read_value(config_subgroup["weight"][()])
+
+                    # Read property weights.
+                    property_weights = {}
+                    weights_subgrp = config_subgroup["property_weights"]
+                    for key in weights_subgrp.keys():
+                        property_weights[key] = read_value(weights_subgrp[key])
+
+                    config_type = read_value(config_subgroup["config_type"][()])
+
+                    # Create a Configuration instance.
+                    config = Configuration(
+                        atomic_numbers=atomic_numbers,
+                        positions=positions,
+                        properties=properties,
+                        cell=cell,
+                        pbc=pbc,
+                        weight=weight,
+                        property_weights=property_weights,
+                        config_type=config_type,
+                    )
+                    sequence_configs.append(config)
+                data.append(tuple(sequence_configs))
+        return cls(data)
+
     def train_validation_split(
         self, train_valid_ratio: float
     ) -> tuple["ConfigSequence", "ConfigSequence"]:
@@ -202,3 +343,7 @@ class ConfigSequence:
 
 def write_value(value):
     return value if value is not None else "None"
+
+
+def read_value(value):
+    return None if value == "None" else value

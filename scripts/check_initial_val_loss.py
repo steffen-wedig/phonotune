@@ -2,7 +2,7 @@ import numpy as np
 from mace.calculators import mace_mp
 from mace.data.utils import Configuration
 
-from phonotune.alexandria.pair_constructor import ConfigSequence, PairConstructor
+from phonotune.alexandria.pair_constructor import ConfigFactory, ConfigSequence
 from phonotune.alexandria.phonon_data import PhononData
 from phonotune.structure_utils import convert_configuration_to_ase
 
@@ -11,21 +11,20 @@ type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 
 def main():
     device = "cuda"
-    DATA_DIR = "data"
-    mp_id = "mp-531340"
+    mp_id = "mp-25"
     data = PhononData.load_phonon_data(
         mp_id
     )  # Load the Phonon Data, which reutrns a list of displacements and equilibirum structures
-    pc = PairConstructor(
+    pc = ConfigFactory(
         data
     )  # This converts a list of single-atom displacements into a tuple of configuration pairs. The pairs of configurations
-    pairs = pc.construct_all_pairs()
+    pairs, _ = pc.construct_all_pairs()
     print(f"{len(pairs)} pairs")
 
     config_seq = ConfigSequence(pairs)
 
     (train_seq, valid_seq) = config_seq.train_validation_split(0.8)
-    valid_seq.to_HDF5(h5_file=f"{DATA_DIR}/mace_multiconfig_mgal2o4_validation.hdf5")
+
     unrolled_valid_split = valid_seq.unroll()
 
     calc = mace_mp("small", device)

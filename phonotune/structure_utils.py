@@ -14,6 +14,8 @@ from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 
+from phonotune.alexandria.materials_iterator import MaterialsIterator
+
 
 def get_low_T_Ru2Sn3_structure():
     a = 12.344
@@ -123,7 +125,7 @@ def convert_configuration_to_ase(configuration: Configuration, calc) -> Atoms:
     energy = atoms.get_potential_energy()
     atoms.calc = None
 
-    atoms.set_array("DFT_forces", configuration.properties["forces"])
+    atoms.set_array("DFT_forces", configuration.properties["DFT_forces"])
     atoms.info["MACE_energy"] = energy
     return atoms
 
@@ -139,3 +141,35 @@ def configurations_to_xyz(xyz_file_path: str, configs: Sequence[Configuration], 
     write_extxyz(
         f, ase_atoms, columns=["symbols", "positions", "DFT_forces"], write_info=True
     )
+
+
+def get_spinel_group_mpids(mp_ids: MaterialsIterator):
+    yaml_file = "./api_key.yaml"
+
+    with open(yaml_file) as f:
+        api_key = yaml.safe_load(f)["MP_API_KEY"]
+
+    spinel_list = []
+    # Fetch the reference spinel structure
+
+    with MPRester(api_key) as mpr:
+        docs_al = mpr.materials.summary.search(
+            chemsys="*-Al-O", formula="AB2C4", fields=["material_id"]
+        )
+
+        docs_bin = mpr.materials.summary.search(
+            chemsys="Al-O", formula="A3B4", fields=["material_id"]
+        )
+
+        docs_al.extend(docs_bin)
+        docs = [doc.material_id for doc in docs_al]
+
+        search_space = set(mp_ids) & set(docs)
+
+        spinel_list = list(search_space)
+
+        docs = mpr.materials.summary.search(
+            material_ids=spinel_list, fields=["formula_pretty"]
+        )
+        formulas = [i.formula_pretty for i in docs]
+        return spinel_list, formulas

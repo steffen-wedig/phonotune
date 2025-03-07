@@ -68,7 +68,7 @@ class PhononData:
         )
         displacements = [
             Displacement(
-                atom=disp["atom"],
+                atom=disp["atom"] - 1,  # Alexandria dataset is presumably 1 indexed
                 displacement=np.array(disp["displacement"], dtype=np.float64),
                 forces=np.array(disp["forces"], dtype=np.float64),
                 cell=data["supercell"]["lattice"],
@@ -104,7 +104,7 @@ class PhononData:
 
         # phonon calculations
 
-        phonon.generate_displacements(distance=0.03)
+        phonon.generate_displacements(distance=0.01)
 
         _ = phonon.supercells_with_displacements
         _ = calculate_forces_phonopy_set(phonon, mace_calculator)
@@ -172,12 +172,20 @@ class PhononDataset:
         self.phonon_data_samples = phonon_data_samples
 
     @classmethod
-    def load_phonon_dataset(cls, materials_iterator: MaterialsIterator, N_materials):
+    def load_phonon_dataset(
+        cls, materials_iterator: MaterialsIterator, N_materials=None
+    ):
         count = 0
 
         phonon_data_samples = []
-        while count < N_materials:
-            mp_id = next(materials_iterator)
+        while (
+            not N_materials or count < N_materials
+        ):  # Always evaluates to true if N_materials is not set
+            try:
+                mp_id = next(materials_iterator)
+            except StopIteration:
+                break
+
             new_phonon_data = PhononData.load_phonon_data(mp_id)
             phonon_data_samples.append(new_phonon_data)
             count += 1

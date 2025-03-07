@@ -5,6 +5,7 @@ from matplotlib.figure import Figure
 
 from phonotune.alexandria.data_utils import serialization_dict_type_conversion
 from phonotune.alexandria.phonon_data import PhononData, PhononDataset
+from phonotune.structure_utils import convert_configuration_to_ase
 
 
 class ModelComparison:
@@ -56,7 +57,7 @@ class ModelComparison:
             heat_capacity_delta,
         )
 
-    def store_data(self, filepath: str, calculator_name=None):
+    def store_data(self, filepath: str, calculator_name=None, validation_loss=None):
         if calculator_name is None:
             calculator_name = self.dataset_pred.get_source()
 
@@ -70,7 +71,11 @@ class ModelComparison:
             "td_deltas": self.td_deltas,
             "phonon_error": self.phonon_errors,
             "td_maes": self.mae_dict,
+            "phonon_mse": self.phonon_mse,
         }
+
+        if validation_loss is not None:
+            data["validation_loss"] = validation_loss
 
         with open(filepath, "w") as f:
             yaml.dump(serialization_dict_type_conversion(data), f)
@@ -166,6 +171,8 @@ class ModelComparison:
         self.phonon_errors = {"ref_freq": ref_frequencies, "errors": errors}
 
         mse = np.mean(errors)
+
+        self.phonon_mse = mse
 
         return mse, ref_frequencies, errors
 
@@ -272,3 +279,22 @@ class Visualizer:
                 errors[model_idx, cat_idx, :] = np.array(td_deltas[category])
 
         return errors
+
+
+def calculate_validation_loss(calculator, validation_dataset):
+    unrolled_valid_split = validation_dataset.unroll()
+
+    rmses = []
+    for configuration in unrolled_valid_split:
+        ase_atoms = convert_configuration_to_ase(configuration, calculator)
+        ase_atoms.calc = calculator
+        mace_forces = ase_atoms.get_forces()
+
+        dft_forces = ase_atoms.get_array("DFT_forces")
+
+        rmse_forces = (
+            np.sqrt(np.mean((mace_forces - dft_forces) ** 2)) * 1000
+        )  # Conversion to meV/A
+        rmses.append(rmse_forces)
+
+    return np.mean(np.array(rmses)).item()
