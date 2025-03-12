@@ -1,8 +1,12 @@
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 
-from phonotune.calculation_configuration import Material
-from phonotune.plotting_bands import extract_bands, load_yaml_data, plot_phonon_bands
+from phonotune.incommensurate.calculation_configuration import Material
+from phonotune.phonon_calculation.plotting_bands import (
+    extract_bands,
+    load_yaml_data,
+    plot_phonon_bands,
+)
 
 # Define a color for each calculator.
 calc_colors = {"MACE_OMAT": "black", "MACE_MP_0": "red"}

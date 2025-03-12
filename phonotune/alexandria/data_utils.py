@@ -6,7 +6,7 @@ import numpy as np
 import requests
 import yaml
 
-from phonotune.alexandria.materials_iterator import MaterialsIterator
+from phonotune.materials_iterator import MaterialsIterator
 
 
 def download_and_unpack_phonons(mp_id):
@@ -106,6 +106,25 @@ def search_highest_number_displacements(mat_iterator: MaterialsIterator):
 
         except StopIteration:
             return max_displacements, max_displacements_mp_id
+
+
+def check_last_atom_displaced(mat_iterator: MaterialsIterator):
+    while True:
+        mp_id = next(mat_iterator)
+        data = open_data(mp_id)
+
+        num_atoms = len(data["supercell"]["points"])
+
+        max_disp_atom = data["displacements"][-1]["atom"]
+        min_disp_atom = data["displacements"][0]["atom"]
+
+        if min_disp_atom == 0:
+            print(f"Zero atom at {mp_id}")
+
+        if num_atoms == max_disp_atom:
+            print("Last atom reached")
+            print(mp_id)
+            break
 
 
 def serialization_dict_type_conversion(data_dict: dict):

@@ -8,7 +8,7 @@ from phonotune.alexandria.phonon_data import PhononData, PhononDataset
 from phonotune.structure_utils import convert_configuration_to_ase
 
 
-class ModelComparison:
+class PhononBenchmark:
     def __init__(self, dataset_ref: PhononDataset, dataset_pred: PhononDataset):
         self.dataset_ref = dataset_ref
         self.dataset_pred = dataset_pred

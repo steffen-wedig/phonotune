@@ -9,3 +9,4 @@ castep_keywords.json
 castep
 data
 .mypy_cache
+training_data

@@ -1,13 +1,13 @@
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.materials_iterator import ListMaterialsIterator
-from phonotune.alexandria.model_comparison import (
+from phonotune.alexandria.configuration_data import ConfigSequenceDataset
+from phonotune.alexandria.phonon_benchmark import (
     ModelComparison,
     calculate_validation_loss,
 )
-from phonotune.alexandria.pair_constructor import ConfigSequence
 from phonotune.alexandria.phonon_data import PhononDataset
 from phonotune.alexandria.structure_datasets import UnitcellDataset
+from phonotune.materials_iterator import ListMaterialsIterator
 
 MACE_MODELS_ROOT = "/data/fast-pc-06/snw30/projects/models"
 
@@ -20,7 +20,7 @@ model_names = [
 ]
 
 
-validation_dataset = ConfigSequence.from_HDF5(
+validation_dataset = ConfigSequenceDataset.from_hdf5(
     f"/data/fast-pc-06/snw30/projects/phonons/phonotune/data/mace_multiconfig_{mat_formula}_validation.hdf5"
 )
 

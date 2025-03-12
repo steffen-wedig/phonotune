@@ -1,4 +1,4 @@
-from phonotune.alexandria.model_comparison import Visualizer
+from phonotune.evaluation.phonon_benchmark import Visualizer
 
 models = "mace-omat-0-medium"
 

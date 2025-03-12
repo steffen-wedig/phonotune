@@ -7,9 +7,11 @@ from mace.calculators import MACECalculator
 
 from phonotune.alexandria.crystal_structures import Supercell, Unitcell
 from phonotune.alexandria.data_utils import open_data
-from phonotune.alexandria.materials_iterator import MaterialsIterator
 from phonotune.alexandria.structure_datasets import UnitcellDataset
-from phonotune.phonon_calculations import calculate_forces_phonopy_set
+from phonotune.materials_iterator import MaterialsIterator
+from phonotune.phonon_calculation.phonon_calculations import (
+    calculate_forces_phonopy_set,
+)
 
 
 @dataclass

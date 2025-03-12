@@ -1,15 +1,15 @@
 import math
+import random
 from collections.abc import Sequence
 
 import h5py
 import numpy as np
+from ase.io.extxyz import write_extxyz
 from ase.symbols import symbols2numbers
-from mace.data.atomic_data import AtomicData
 from mace.data.utils import Configuration
-from mace.tools import AtomicNumberTable
-from mace.tools.torch_geometric.data import DataSequence
 
 from phonotune.alexandria.phonon_data import Displacement, PhononData
+from phonotune.structure_utils import convert_configuration_to_ase
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 
@@ -121,7 +121,7 @@ class ConfigFactory:
             "first_atoms": displacement_data,
         }
 
-        return config, displacement_dataset
+        return configs, displacement_dataset
 
     @staticmethod
     def convert_displacement_to_config(
@@ -202,42 +202,131 @@ class ConfigFactory:
         return configuration
 
 
-class PairDataset:
-    # Deprecated, use the configSequence instead
-
-    def __init__(self, data: list[tuple[AtomicData, AtomicData]]):
+class ConfigSingleDataset:
+    def __init__(self, data: list[Configuration]):
         self.data = data
 
-    def __len__(self):
-        return len(self.data)
+    def get_splits(self, N_splits: Sequence[int]) -> tuple["ConfigSingleDataset"]:
+        # shuffle???
+        splits = []
+        for i in N_splits:
+            split = self.data[:i]
+            splits.append(ConfigSingleDataset(split))
+        return splits
 
-    def __getitem__(self, idx):
-        return self.data[idx]
+    def train_validation_split(
+        self, train_valid_ratio: float, shuffle=False
+    ) -> tuple["ConfigSingleDataset", "ConfigSingleDataset"]:
+        split_index = math.floor(train_valid_ratio * len(self.data))
+
+        if shuffle:
+            random.shuffle(self.data)
+
+        training_data = self.data[:split_index]
+        validation_data = self.data[split_index:]
+
+        return ConfigSingleDataset(training_data), ConfigSingleDataset(validation_data)
+
+    def to_xyz(self, xyz_file_path: str):
+        ase_atoms = []
+
+        for config in self.data:
+            atoms = convert_configuration_to_ase(config)
+            ase_atoms.append(atoms)
+
+        f = open(xyz_file_path, "w")
+        write_extxyz(
+            f,
+            ase_atoms,
+            columns=["symbols", "positions", "DFT_forces"],
+            write_info=True,
+        )
+
+    def to_hdf5(self, h5_file):
+        # This creates hdf5 files based on the hdf5 layout of the mace/refactor_data branch
+        with h5py.File(h5_file, "w") as f:
+            grp = f.create_group("config_batch_0")
+
+            for config_idx, config in enumerate(self.data):
+                config_subgroup_name = f"config_{config_idx}"
+                config_subgroup = grp.create_group(config_subgroup_name)
+                config_subgroup["atomic_numbers"] = write_value(config.atomic_numbers)
+                config_subgroup["positions"] = write_value(config.positions)
+                properties_subgrp = config_subgroup.create_group("properties")
+                for key, value in config.properties.items():
+                    properties_subgrp[key] = write_value(value)
+                config_subgroup["cell"] = write_value(config.cell)
+                config_subgroup["pbc"] = write_value(config.pbc)
+                config_subgroup["weight"] = write_value(config.weight)
+                weights_subgrp = config_subgroup.create_group("property_weights")
+                for key, value in config.property_weights.items():
+                    weights_subgrp[key] = write_value(value)
+                config_subgroup["config_type"] = write_value(config.config_type)
+
+    def to_main_hdf5(self, h5_file):
+        # This creates hdf5 files based on the hdf5 layout of the mace/main branch
+        pass
 
     @classmethod
-    def from_configurations(
-        cls, configs: ConfigurationPairs, z_table: AtomicNumberTable, cutoff: float
-    ):
-        data = []
+    def from_hdf5(cls, h5_file):
+        configurations = []
 
-        for config0, config1 in configs:
-            atomic_data0 = AtomicData.from_config(
-                config0, z_table=z_table, cutoff=cutoff
-            )
-            atomic_data1 = AtomicData.from_config(
-                config1, z_table=z_table, cutoff=cutoff
-            )
+        with h5py.File(h5_file, "r") as f:
+            # Iterate over all batch groups (e.g., "config_batch_0", "config_batch_1", etc.)
+            for batch_key in sorted(f.keys()):
+                if not batch_key.startswith("config_batch_"):
+                    continue
+                batch_grp = f[batch_key]
+                # Iterate over each configuration subgroup in the batch
+                for config_key in sorted(batch_grp.keys()):
+                    if not config_key.startswith("config_"):
+                        continue
+                    subgrp = batch_grp[config_key]
 
-            data.append(DataSequence(seq=(atomic_data0, atomic_data1)))
+                    # Read atomic_numbers and positions directly (assuming they were stored as arrays)
+                    atomic_numbers = subgrp["atomic_numbers"][()]
+                    positions = subgrp["positions"][()]
 
-        return cls(data=data)
+                    # Read properties dictionary
+                    properties = {}
+                    properties_grp = subgrp["properties"]
+                    for key in properties_grp:
+                        properties[key] = read_value(properties_grp[key][()])
+
+                    # Read remaining attributes using read_value
+                    cell = read_value(subgrp["cell"][()])
+                    pbc = read_value(subgrp["pbc"][()])
+                    weight = read_value(subgrp["weight"][()])
+
+                    # Read property_weights dictionary
+                    property_weights = {}
+                    weights_grp = subgrp["property_weights"]
+                    for key in weights_grp:
+                        property_weights[key] = read_value(weights_grp[key][()])
+
+                    config_type = read_value(subgrp["config_type"][()])
+
+                    # Construct the Configuration object.
+                    config = Configuration(
+                        atomic_numbers=atomic_numbers,
+                        positions=positions,
+                        properties=properties,
+                        property_weights=property_weights,
+                        cell=cell,
+                        pbc=pbc,
+                        weight=weight,
+                        config_type=config_type,
+                    )
+                    configurations.append(config)
+
+        return cls(data=configurations)
 
 
-class ConfigSequence:
+class ConfigSequenceDataset:
     def __init__(self, data: list[tuple[Configuration, ...]]):
         self.data = data
 
-    def to_HDF5(self, h5_file):
+    def to_hdf5(self, h5_file):
         with h5py.File(h5_file, "w") as f:
             grp = f.create_group("config_batch_0")
             for sequence_idx, sequence in enumerate(self.data):
@@ -263,7 +352,7 @@ class ConfigSequence:
                     config_subgroup["config_type"] = write_value(config.config_type)
 
     @classmethod
-    def from_HDF5(cls, h5_file):
+    def from_hdf5(cls, h5_file):
         data = []
         with h5py.File(h5_file, "r") as f:
             grp = f["config_batch_0"]
@@ -317,28 +406,30 @@ class ConfigSequence:
 
     def train_validation_split(
         self, train_valid_ratio: float
-    ) -> tuple["ConfigSequence", "ConfigSequence"]:
-        # shuffle the data ???
+    ) -> tuple["ConfigSequenceDataset", "ConfigSequenceDataset"]:
         split_index = math.floor(train_valid_ratio * len(self.data))
 
         training_data = self.data[:split_index]
         validation_data = self.data[split_index:]
 
-        return ConfigSequence(training_data), ConfigSequence(validation_data)
+        return ConfigSequenceDataset(training_data), ConfigSequenceDataset(
+            validation_data
+        )
 
-    def get_splits(self, N_splits: Sequence[int]) -> tuple["ConfigSequence", ...]:
+    def get_splits(self, N_splits: Sequence[int]) -> tuple["ConfigSequenceDataset"]:
         # shuffle???
         splits = []
         for i in N_splits:
             split = self.data[:i]
-            splits.append(ConfigSequence(data=split))
+            splits.append(ConfigSequenceDataset(split))
         return splits
 
     def unroll(self):
         unrolled_configs = []
         for configs in self.data:
             unrolled_configs.extend(configs)
-        return unrolled_configs
+
+        return ConfigSingleDataset(unrolled_configs)
 
 
 def write_value(value):
@@ -346,4 +437,8 @@ def write_value(value):
 
 
 def read_value(value):
-    return None if value == "None" else value
+    if isinstance(value, str):
+        if value == "None":
+            return None
+
+    return value

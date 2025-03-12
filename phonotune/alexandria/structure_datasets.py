@@ -14,7 +14,7 @@ from phonotune.alexandria.data_utils import (
     is_unstable_lattice,
     open_data,
 )
-from phonotune.alexandria.materials_iterator import ListMaterialsIterator
+from phonotune.materials_iterator import ListMaterialsIterator
 from phonotune.structure_utils import unitcell_fire_relaxation
 
 

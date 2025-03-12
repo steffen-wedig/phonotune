@@ -5,9 +5,8 @@ from mace.modules.loss import force_difference_mse_error
 from mace.tools import get_atomic_number_table_from_zs
 from mace.tools.torch_geometric.dataloader import DataLoader
 
-from phonotune.alexandria.pair_constructor import ConfigFactory, ConfigSequence
+from phonotune.alexandria.configuration_data import ConfigFactory, ConfigSequenceDataset
 from phonotune.alexandria.phonon_data import PhononData
-from phonotune.structure_utils import configurations_to_xyz
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 
@@ -23,22 +22,20 @@ def main():
     pc = ConfigFactory(
         data
     )  # This converts a list of single-atom displacements into a tuple of configuration pairs. The pairs of configurations
-    pairs, _ = pc.construct_all_pairs()
+    pairs, _ = pc.construct_configs_per_phonon_data(data)
     print(f"{len(pairs)} pairs")
 
-    config_seq = ConfigSequence(pairs)
+    config_seq = ConfigSequenceDataset(pairs)
 
     (train_seq, valid_seq) = config_seq.train_validation_split(0.8)
-    valid_seq.to_HDF5(
+    valid_seq.to_hdf5(
         h5_file=f"{DATA_DIR}/mace_multiconfig_{mat_formula}_validation.hdf5"
     )
-    unrolled_valid_split = valid_seq.unroll()
 
     calc = mace_mp("small", device, default_dtype="float64")
 
-    configurations_to_xyz(
+    valid_seq.unroll().to_xyz(
         f"{DATA_DIR}/mace_multiconfig_{mat_formula}_validation.xyz",
-        unrolled_valid_split,
         calc,
     )
 
@@ -47,15 +44,14 @@ def main():
     splits = train_seq.get_splits(N_sample_splits)
 
     for N, split in zip(N_sample_splits, splits, strict=False):
-        split.to_HDF5(
+        split.to_hdf5(
             h5_file=f"{DATA_DIR}/mace_multiconfig_{mat_formula}_train_{N}.hdf5"
         )
 
         unrolled_config_split = split.unroll()
 
-        configurations_to_xyz(
+        unrolled_config_split.to_xyz(
             f"{DATA_DIR}/mace_multiconfig_{mat_formula}_train_{N}.xyz",
-            unrolled_config_split,
             calc,
         )
 

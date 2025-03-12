@@ -1,7 +1,7 @@
 from mace.calculators import mace_mp
 
-from phonotune.alexandria.materials_iterator import FileStructureIterator
 from phonotune.alexandria.phonon_data import SupercellDataset
+from phonotune.materials_iterator import FileStructureIterator
 
 count = 0
 structure_iterator = FileStructureIterator(

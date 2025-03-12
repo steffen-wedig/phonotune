@@ -1,8 +1,8 @@
 import numpy as np
 
+from phonotune.alexandria.configuration_data import ConfigFactory
 from phonotune.alexandria.crystal_structures import Unitcell
 from phonotune.alexandria.data_utils import open_data
-from phonotune.alexandria.pair_constructor import ConfigFactory
 from phonotune.alexandria.phonon_data import PhononData
 
 

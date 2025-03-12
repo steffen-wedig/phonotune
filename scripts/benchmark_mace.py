@@ -1,9 +1,9 @@
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.materials_iterator import FileMaterialsIterator
-from phonotune.alexandria.model_comparison import ModelComparison
 from phonotune.alexandria.phonon_data import PhononDataset
 from phonotune.alexandria.structure_datasets import UnitcellDataset
+from phonotune.evaluation.phonon_benchmark import PhononBenchmark
+from phonotune.materials_iterator import FileMaterialsIterator
 
 MACE_MODELS_ROOT = "/data/fast-pc-04/snw30/projects/mace_models"
 
@@ -42,7 +42,7 @@ phonon_dataset_ref = PhononDataset.load_phonon_dataset(
     materials_iterator=mat_iterator_ref, N_materials=N_materials
 )
 
-comp = ModelComparison(dataset_ref=phonon_dataset_ref, dataset_pred=phonon_dataset_pred)
+comp = PhononBenchmark(dataset_ref=phonon_dataset_ref, dataset_pred=phonon_dataset_pred)
 
 mae_dict = comp.calculate_MAE()
 mse, freq, errors = comp.compare_datasets_phonons()

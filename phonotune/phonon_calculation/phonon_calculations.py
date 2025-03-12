@@ -7,7 +7,7 @@ from ase.calculators.calculator import Calculator
 from phonopy.api_phonopy import Phonopy
 from tqdm import tqdm
 
-from phonotune.helper_functions import (
+from phonotune.phonon_calculation.helper_functions import (
     aseatoms2phonopy,
     get_chemical_formula,
 )
