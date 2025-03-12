@@ -1,7 +1,10 @@
 from mace.calculators import mace_mp
-from mace.data.utils import Configuration
 
-from phonotune.alexandria.configuration_data import ConfigFactory, ConfigSequenceDataset
+from phonotune.alexandria.configuration_data import (
+    ConfigFactory,
+    ConfigSequenceDataset,
+    Configuration,
+)
 from phonotune.alexandria.phonon_data import PhononData
 from phonotune.evaluation.training_evaluation import evaluate_model_on_config_set
 

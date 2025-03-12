@@ -1,11 +1,14 @@
 from mace.calculators import mace_mp
 from mace.data.hdf5_dataset import MultiConfigHDF5Dataset
-from mace.data.utils import Configuration
 from mace.modules.loss import force_difference_mse_error
 from mace.tools import get_atomic_number_table_from_zs
 from mace.tools.torch_geometric.dataloader import DataLoader
 
-from phonotune.alexandria.configuration_data import ConfigFactory, ConfigSequenceDataset
+from phonotune.alexandria.configuration_data import (
+    ConfigFactory,
+    ConfigSequenceDataset,
+    Configuration,
+)
 from phonotune.alexandria.phonon_data import PhononData
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]

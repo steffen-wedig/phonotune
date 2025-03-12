@@ -6,11 +6,11 @@ from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE, LBFGS
 from ase.visualize.plot import plot_atoms
-from mace.data.atomic_data import Configuration
 from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 
+from phonotune.alexandria.configuration_data import Configuration
 from phonotune.materials_iterator import MaterialsIterator
 
 

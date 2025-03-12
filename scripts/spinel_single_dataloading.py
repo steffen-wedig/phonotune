@@ -1,8 +1,7 @@
-from mace.data.utils import Configuration
-
 from phonotune.alexandria.configuration_data import (
     ConfigFactory,
     ConfigSingleDataset,
+    Configuration,
 )
 from phonotune.alexandria.phonon_data import PhononDataset
 from phonotune.materials_iterator import (
