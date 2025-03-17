@@ -1,11 +1,11 @@
 import matplotlib.pyplot as plt
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.crystal_structures import Unitcell
-from phonotune.alexandria.phonon_data import PhononData
 from phonotune.phonon_calculation.plotting_bands import (
     plot_model_reference_phonon_comparison,
 )
+from phonotune.phonon_data.crystal_structures import Unitcell
+from phonotune.phonon_data.phonon_data import PhononData
 from phonotune.structure_utils import unitcell_fire_relaxation
 
 spinel_mpid = "mp-3536"
