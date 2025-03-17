@@ -44,7 +44,7 @@ phonon_dataset_ref = PhononDataset.load_phonon_dataset(
 
 comp = PhononBenchmark(dataset_ref=phonon_dataset_ref, dataset_pred=phonon_dataset_pred)
 
-mae_dict = comp.calculate_MAE()
+mae_dict = comp.calculate_thermodynamic_MAE()
 mse, freq, errors = comp.compare_datasets_phonons()
 
 filepath = f"/data/fast-pc-06/snw30/projects/phonons/phonotune/data/phonon_comp_{N_materials}_{MODEL_NAME}.yaml"

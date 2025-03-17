@@ -8,6 +8,9 @@ from mace.calculators import MACECalculator
 
 from phonotune.alexandria.configuration_data import ConfigSingleDataset
 from phonotune.evaluation.eval_utils import get_model_name_epoch_from_checkpoint_path
+from phonotune.evaluation.phonon_benchmark import (
+    PhononBenchmark,
+)
 from phonotune.model_utils import update_weights_from_checkpoint
 from phonotune.structure_utils import convert_configuration_to_ase
 
@@ -19,12 +22,23 @@ class ModelTrainingRun:
         self.model_name: str = model_name
         self.directory: str = directory
         self.trainig_type: TrainingType | None = training_type
+        self.max_epochs = None
         self.checkpoint_paths: dict[int:str] = self.get_checkpoints()
 
         self.loss_txt_file: str | None = glob.glob(f"{self.directory}/results/*")[0]
-        self.model_file = glob.glob(f"{self.directory}/*.model")[1]
+        self.model_file = self.get_model_filepath()
         self.N_samples = self.get_N_samples()
         self.validation_loss = Sequence[float]
+
+    def get_model_filepath(self):
+        paths = glob.glob(
+            f"{self.directory}/*.model"
+        )  # returns the path of the compiled and the regular, uncompiled model
+
+        for model_path in paths:
+            if "compiled" not in model_path:
+                print(model_path)
+                return model_path
 
     def get_training_type(self):
         if "finetune" in self.model_name:
@@ -67,6 +81,7 @@ class ModelTrainingRun:
             epoch: path for epoch, path in zip(epochs, checkpoint_paths, strict=False)
         }
 
+        self.max_epochs = epochs[-1]
         return checkpoint_paths
 
     @staticmethod
@@ -109,32 +124,28 @@ class ModelTrainingRun:
 
         return validation_loss, replay_validation_loss
 
-    def evaluate_checkpoints_on_configs(self, test_dataset: ConfigSingleDataset):
-        # epochs = self.checkpoint_paths.keys()
-        # paths = self.checkpoint_paths.items()
-
+    def evaluate_checkpoints_on_configs(
+        self, test_dataset: ConfigSingleDataset, evaluation_interval: int
+    ):
         rmses = {}
-
-        print(self.model_file)
         for epoch, path in self.checkpoint_paths.items():
-            if epoch % 10 != 0:
-                continue
+            if epoch % evaluation_interval == 0 or epoch == self.max_epochs:
+                mace_calc = MACECalculator(
+                    model_paths=self.model_file,
+                    device="cuda",
+                    enable_cueq=True,
+                )
 
-            mace_calc = MACECalculator(
-                model_paths=self.model_file,
-                head="default",
-                device="cuda",
-                enable_cueq=True,
-            )
+                mace_calc = update_weights_from_checkpoint(
+                    mace_calculator=mace_calc, checkpoint_path=path
+                )
 
-            mace_calc = update_weights_from_checkpoint(
-                mace_calculator=mace_calc, checkpoint_path=path
-            )
+                rmse_epoch = self.evaluate_model_on_config_set(mace_calc, test_dataset)
 
-            rmse_epoch = self.evaluate_model_on_config_set(mace_calc, test_dataset)
-
-            print(f"Epoch {epoch}, RMSE: {rmse_epoch}")
-            rmses[epoch] = rmse_epoch
+                print(f"Epoch {epoch}, RMSE: {rmse_epoch}")
+                rmses[epoch + 1] = (
+                    rmse_epoch  # Add the 1 to ensure consistency with the validation loss plot. Here we one index the epochs, instead of 0 index as in the trainig log
+                )
 
         return rmses
 
@@ -152,4 +163,24 @@ class ModelTrainingRun:
             rmse_forces = np.sqrt(np.mean((mace_forces - dft_forces) ** 2)) * 1000
             rmses.append(rmse_forces)
 
-        return np.mean(np.array(rmses))
+        return np.mean(np.array(rmses)).item()
+
+    def evaluate_model_on_phonons(self, test_mp_ids):
+        mace_calc = MACECalculator(
+            model_paths=self.model_file,
+            head="default",
+            device="cuda",
+            enable_cueq=True,
+        )
+
+        comp = PhononBenchmark.construct_from_mpids(mace_calc, test_mp_ids)
+
+        td_mae_dict = comp.calculate_thermodynamic_MAE()
+        phonon_mse, freq, errors = comp.compare_datasets_phonons()
+        print(f"Phonon MSE {phonon_mse}")
+        filepath = f"{self.directory}/test_mp_ids_phonon_comp_{self.model_name}.yaml"
+        comp.store_data(filepath, calculator_name=self.model_name)
+
+        self.phonon_evaluation = comp
+
+        return td_mae_dict, phonon_mse

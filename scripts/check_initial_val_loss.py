@@ -3,9 +3,9 @@ from mace.calculators import mace_mp
 from phonotune.alexandria.configuration_data import (
     ConfigFactory,
     ConfigSequenceDataset,
-    Configuration,
 )
 from phonotune.alexandria.phonon_data import PhononData
+from phonotune.configuration import Configuration
 from phonotune.evaluation.training_evaluation import evaluate_model_on_config_set
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]

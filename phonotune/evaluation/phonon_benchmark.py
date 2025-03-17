@@ -1,10 +1,13 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import yaml
+from mace.calculators import MACECalculator
 from matplotlib.figure import Figure
 
 from phonotune.alexandria.data_utils import serialization_dict_type_conversion
 from phonotune.alexandria.phonon_data import PhononData, PhononDataset
+from phonotune.alexandria.structure_datasets import UnitcellDataset
+from phonotune.materials_iterator import ListMaterialsIterator
 from phonotune.structure_utils import convert_configuration_to_ase
 
 
@@ -14,6 +17,29 @@ class PhononBenchmark:
         self.dataset_pred = dataset_pred
         self.td_deltas = None
         self.phonon_errors = None
+
+    @classmethod
+    def construct_from_mpids(cls, mace_calc: MACECalculator, mp_ids):
+        mat_iterator = ListMaterialsIterator(mp_ids)
+        unitcell_dataset = UnitcellDataset.from_alexandria(
+            mat_iterator,
+            N_materials=len(mp_ids),
+            mace_calculator=mace_calc,
+            skip_unstable=False,
+        )
+
+        phonon_dataset_pred = (
+            PhononDataset.compute_phonon_dataset_from_unit_cell_dataset(
+                unitcell_dataset=unitcell_dataset, mace_calculator=mace_calc
+            )
+        )
+
+        mat_iterator = ListMaterialsIterator(mp_ids)
+        phonon_dataset_ref = PhononDataset.load_phonon_dataset(
+            materials_iterator=mat_iterator, N_materials=len(mp_ids)
+        )
+
+        return cls(dataset_ref=phonon_dataset_ref, dataset_pred=phonon_dataset_pred)
 
     @staticmethod
     def compare_phonon_td_data(
@@ -77,6 +103,8 @@ class PhononBenchmark:
         if validation_loss is not None:
             data["validation_loss"] = validation_loss
 
+        self.error_data = data
+
         with open(filepath, "w") as f:
             yaml.dump(serialization_dict_type_conversion(data), f)
 
@@ -114,7 +142,7 @@ class PhononBenchmark:
 
         return self.td_deltas
 
-    def calculate_MAE(self):
+    def calculate_thermodynamic_MAE(self):
         if self.td_deltas is None:
             _ = self.compare_datasets_td()
 

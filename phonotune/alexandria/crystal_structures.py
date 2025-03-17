@@ -3,6 +3,8 @@ from ase import Atoms
 from phonopy.api_phonopy import Phonopy
 from phonopy.structure.atoms import PhonopyAtoms
 
+from phonotune.alexandria.data_utils import open_data, unpack_points
+
 
 class Cell:
     def __init__(self, lattice, fractional_coordinates, atom_symbols, mp_id):
@@ -26,18 +28,6 @@ class Cell:
 
         return atoms
 
-    @staticmethod
-    def unpack_points(points):
-        N_atoms = len(points)
-        frac_coordinates = np.zeros(shape=(N_atoms, 3))
-        atom_symbols = []
-
-        for idx, p in enumerate(points):
-            frac_coordinates[idx, :] = p["coordinates"]
-            atom_symbols.append(p["symbol"])
-
-        return frac_coordinates, atom_symbols
-
 
 class Unitcell(Cell):
     def __init__(
@@ -54,10 +44,24 @@ class Unitcell(Cell):
         self.primitive_matrix = primitive_matrix
 
     @classmethod
+    def from_alexandria(cls, mp_id):
+        data = open_data(mp_id)
+
+        unitcell = Unitcell.from_lattice_and_points(
+            mp_id=mp_id,
+            lattice=data["unit_cell"]["lattice"],
+            points=data["unit_cell"]["points"],
+            phonon_calc_supercell=data["supercell_matrix"],
+            primitive_matrix=data.get("primitive_matrix", np.eye(3)),
+        )
+
+        return unitcell
+
+    @classmethod
     def from_lattice_and_points(
         cls, mp_id, lattice, points, phonon_calc_supercell, primitive_matrix
     ):
-        frac_coordinates, atom_symbols = cls.unpack_points(points)
+        frac_coordinates, atom_symbols = unpack_points(points)
 
         return cls(
             lattice=lattice,
@@ -89,7 +93,7 @@ class Supercell(Cell):
 
     @classmethod
     def from_lattice_and_points(cls, mp_id, lattice, points):
-        frac_coordinates, atom_symbols = cls.unpack_points(points)
+        frac_coordinates, atom_symbols = unpack_points(points)
 
         return cls(
             lattice=lattice,

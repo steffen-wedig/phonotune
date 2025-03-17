@@ -139,3 +139,37 @@ def serialization_dict_type_conversion(data_dict: dict):
         else:
             new_dict[key] = value
     return new_dict
+
+
+def unpack_points(points):
+    # Unpacks the "points" dicts in the alexandria phonon dataset
+    N_atoms = len(points)
+    frac_coordinates = np.zeros(shape=(N_atoms, 3))
+    atom_symbols = []
+    for idx, p in enumerate(points):
+        frac_coordinates[idx, :] = p["coordinates"]
+        atom_symbols.append(p["symbol"])
+
+    return frac_coordinates, atom_symbols
+
+
+def get_displacement_dataset_from_alexandria_data_dict(data):
+    displacement_data = []
+
+    _, atom_symbols = unpack_points(data["supercell"]["points"])
+
+    for disp in data["displacements"]:
+        displacement_data.append(
+            {
+                "number": disp["atom"] - 1,
+                "displacement": np.array(disp["displacement"], dtype=np.float64),
+                "forces": np.array(disp["forces"], dtype=np.float64),
+            }
+        )
+
+    displacement_dataset = {
+        "natoms": len(atom_symbols),
+        "first_atoms": displacement_data,
+    }
+
+    return displacement_dataset

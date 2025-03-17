@@ -7,9 +7,9 @@ from mace.tools.torch_geometric.dataloader import DataLoader
 from phonotune.alexandria.configuration_data import (
     ConfigFactory,
     ConfigSequenceDataset,
-    Configuration,
 )
 from phonotune.alexandria.phonon_data import PhononData
+from phonotune.configuration import Configuration
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 

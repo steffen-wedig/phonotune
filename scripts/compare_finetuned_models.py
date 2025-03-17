@@ -1,12 +1,12 @@
 from mace.calculators import MACECalculator
 
 from phonotune.alexandria.configuration_data import ConfigSequenceDataset
-from phonotune.alexandria.phonon_benchmark import (
-    ModelComparison,
-    calculate_validation_loss,
-)
 from phonotune.alexandria.phonon_data import PhononDataset
 from phonotune.alexandria.structure_datasets import UnitcellDataset
+from phonotune.evaluation.phonon_benchmark import (
+    PhononBenchmark,
+    calculate_validation_loss,
+)
 from phonotune.materials_iterator import ListMaterialsIterator
 
 MACE_MODELS_ROOT = "/data/fast-pc-06/snw30/projects/models"
@@ -58,11 +58,11 @@ for model_name in model_names:
             materials_iterator=mat_iterator, N_materials=1
         )
 
-        comp = ModelComparison(
+        comp = PhononBenchmark(
             dataset_ref=phonon_dataset_ref, dataset_pred=phonon_dataset_pred
         )
 
-        mae_dict = comp.calculate_MAE()
+        mae_dict = comp.calculate_thermodynamic_MAE()
         mse, freq, errors = comp.compare_datasets_phonons()
         print(f"Phonon MSE {mse}")
         filepath = f"/data/fast-pc-06/snw30/projects/phonons/phonotune/data/{mat_formula}_phonon_comp_{model_name}.yaml"

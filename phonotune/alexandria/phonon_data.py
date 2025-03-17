@@ -6,7 +6,10 @@ from ase.build import make_supercell
 from mace.calculators import MACECalculator
 
 from phonotune.alexandria.crystal_structures import Supercell, Unitcell
-from phonotune.alexandria.data_utils import open_data
+from phonotune.alexandria.data_utils import (
+    get_displacement_dataset_from_alexandria_data_dict,
+    open_data,
+)
 from phonotune.alexandria.structure_datasets import UnitcellDataset
 from phonotune.materials_iterator import MaterialsIterator
 from phonotune.phonon_calculation.phonon_calculations import (
@@ -102,26 +105,10 @@ class PhononData:
     def calculate_phonon_data_from_unitcell(
         cls, unitcell: Unitcell, mace_calculator: MACECalculator
     ):
-        phonon = unitcell.to_phonopy()  # Creates the supercells required for phonopy
-
-        # phonon calculations
-
-        phonon.generate_displacements(distance=0.01)
-
-        _ = phonon.supercells_with_displacements
-        _ = calculate_forces_phonopy_set(phonon, mace_calculator)
-
-        phonon.produce_force_constants()
-        phonon.symmetrize_force_constants()
-        phonon.run_mesh(
-            np.diag(unitcell.phonon_calc_supercell),
-            is_gamma_center=True,
-            is_mesh_symmetry=False,
+        phonon, mesh_dict = cls.create_phonopy_phonon_from_unitcell(
+            unitcell, mace_calculator
         )
-        mesh_dict = phonon.get_mesh_dict()
 
-        temperatures = [0.0, 75.0, 150.0, 300.0, 600.0]
-        phonon.run_thermal_properties(temperatures=temperatures)
         tp_dict = phonon.get_thermal_properties_dict()
 
         ase_atoms = unitcell.to_ase_atoms()
@@ -167,6 +154,54 @@ class PhononData:
         )
 
         # calculate properties
+
+    @staticmethod
+    def create_phonopy_phonon_from_unitcell(
+        unitcell: Unitcell, mace_calc: MACECalculator
+    ):
+        phonon = unitcell.to_phonopy()  # Creates the supercells required for phonopy
+
+        # phonon calculations
+
+        phonon.generate_displacements(distance=0.01)
+
+        _ = phonon.supercells_with_displacements
+        _ = calculate_forces_phonopy_set(phonon, mace_calc)
+
+        phonon.produce_force_constants()
+        phonon.symmetrize_force_constants()
+        phonon.run_mesh(
+            np.diag(unitcell.phonon_calc_supercell),
+            is_gamma_center=True,
+            is_mesh_symmetry=False,
+        )
+        mesh_dict = phonon.get_mesh_dict()
+
+        temperatures = [0.0, 75.0, 150.0, 300.0, 600.0]
+        phonon.run_thermal_properties(temperatures=temperatures)
+
+        return phonon, mesh_dict
+
+    @staticmethod
+    def create_phonopy_phonon_from_reference_alexandria_data(mp_id):
+        data = open_data(mp_id)
+
+        unitcell = Unitcell.from_alexandria(mp_id)
+        print(f"Ref Vol{unitcell.to_ase_atoms().get_volume()}ö")
+        phonon = unitcell.to_phonopy()
+
+        phonon.dataset = get_displacement_dataset_from_alexandria_data_dict(data)
+        phonon.produce_force_constants()
+        phonon.symmetrize_force_constants()
+
+        assert np.allclose(
+            phonon.force_constants,
+            np.array(data["force_constants"]["elements"]).reshape(
+                phonon.force_constants.shape
+            ),
+        )
+
+        return phonon
 
 
 class PhononDataset:

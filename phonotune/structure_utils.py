@@ -2,7 +2,6 @@ import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
 from ase.calculators.calculator import Calculator
-from ase.constraints import FixSymmetry
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE, LBFGS
 from ase.visualize.plot import plot_atoms
@@ -10,7 +9,7 @@ from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 
-from phonotune.alexandria.configuration_data import Configuration
+from phonotune.configuration import Configuration
 from phonotune.materials_iterator import MaterialsIterator
 
 
@@ -81,11 +80,11 @@ def local_lbfgs_relaxation(
 def local_fire_relaxation(
     atoms: Atoms,
     calculator: Calculator,
-    relaxation_tolerance: float = 0.005,
-    N_max_steps=1000,
+    relaxation_tolerance: float = 0.0005,
+    N_max_steps=10000,
 ):
     atoms.calc = calculator
-    atoms.set_constraint(FixSymmetry(atoms))
+    # atoms.set_constraint(FixSymmetry(atoms))
     sym_filter = FrechetCellFilter(atoms)
     opt = FIRE(sym_filter, logfile="/dev/null")
     converged = opt.run(fmax=relaxation_tolerance, steps=N_max_steps)
@@ -94,16 +93,22 @@ def local_fire_relaxation(
         print(f"Not Converged in {N_max_steps} steps")
         raise ValueError
 
+    return atoms
+
 
 def unitcell_fire_relaxation(
-    unitcell, calculator: Calculator, relaxation_tolerance=0.005, N_max_steps=1000
+    unitcell, calculator: Calculator, relaxation_tolerance=0.005, N_max_steps=10000
 ):
     atoms: Atoms = unitcell.to_ase_atoms()
     try:
-        local_fire_relaxation(atoms, calculator, relaxation_tolerance, N_max_steps)
+        atoms = local_fire_relaxation(
+            atoms, calculator, relaxation_tolerance, N_max_steps
+        )
         # Overwrite the field in the unitcell
         unitcell.fractional_coordinates = atoms.get_scaled_positions()
         unitcell.lattice = atoms.get_cell()
+
+        print(f"Vol: {atoms.get_volume()}")
     except ValueError:
         raise
 
@@ -149,7 +154,14 @@ def get_spinel_group_mpids(mp_ids: MaterialsIterator):
         spinel_list = list(search_space)
 
         docs = mpr.materials.summary.search(
-            material_ids=spinel_list, fields=["formula_pretty"]
+            material_ids=spinel_list, fields=["formula_pretty", "elements"]
         )
+
         formulas = [i.formula_pretty for i in docs]
-        return spinel_list, formulas
+
+        elements = set()
+
+        for i in docs:
+            elements.update(i.elements)
+
+        return spinel_list, formulas, elements
