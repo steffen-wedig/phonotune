@@ -7,7 +7,7 @@ from ase.calculators.calculator import Calculator
 from phonopy.api_phonopy import Phonopy
 from tqdm import tqdm
 
-from phonotune.helper_functions import (
+from phonotune.phonon_calculation.helper_functions import (
     aseatoms2phonopy,
     get_chemical_formula,
 )
@@ -15,11 +15,10 @@ from phonotune.helper_functions import (
 FREQ_CUTOFF = 1e-3
 
 
-def calculate_fc2_phonopy_set(
+def calculate_forces_phonopy_set(
     phonons: Phonopy,
     calculator: Calculator,
     log: bool = True,
-    pbar_kwargs: dict[str, Any] = {},
 ) -> np.ndarray:
     # calculate FC2 force set
 
@@ -29,7 +28,6 @@ def calculate_fc2_phonopy_set(
     for sc in tqdm(
         phonons.supercells_with_displacements,
         desc=f"FC2 calculation: {get_chemical_formula(phonons)}",
-        **pbar_kwargs,
     ):
         if sc is not None:
             atoms = Atoms(sc.symbols, cell=sc.cell, positions=sc.positions, pbc=True)
@@ -91,7 +89,7 @@ def get_fc2_and_freqs(
     q_mesh: np.ndarray | None = None,
     symmetrize_fc2=True,
     log: str | Path | bool = True,
-    pbar_kwargs: dict[str, Any] = {"leave": False},
+    pbar_kwargs: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> tuple[Phonopy, np.ndarray, np.ndarray]:
     if calculator is None:
@@ -99,7 +97,10 @@ def get_fc2_and_freqs(
             f'{get_chemical_formula(phonons)} "calculator" was provided when calculating fc2 force sets.'
         )
 
-    fc2_set = calculate_fc2_phonopy_set(
+    if not pbar_kwargs:
+        pbar_kwargs = {"leave": False}
+
+    fc2_set = calculate_forces_phonopy_set(
         phonons, calculator, log=log, pbar_kwargs=pbar_kwargs
     )
 
