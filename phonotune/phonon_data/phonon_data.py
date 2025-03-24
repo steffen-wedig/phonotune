@@ -5,16 +5,18 @@ import numpy as np
 from ase.build import make_supercell
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.crystal_structures import Supercell, Unitcell
-from phonotune.alexandria.data_utils import (
-    get_displacement_dataset_from_alexandria_data_dict,
-    open_data,
-)
-from phonotune.alexandria.structure_datasets import UnitcellDataset
 from phonotune.materials_iterator import MaterialsIterator
 from phonotune.phonon_calculation.phonon_calculations import (
     calculate_forces_phonopy_set,
 )
+from phonotune.phonon_data.data_utils import (
+    get_displacement_dataset_from_alexandria_data_dict,
+    open_data,
+)
+from phonotune.phonon_data.equilibrium_structure import Supercell, Unitcell
+from phonotune.phonon_data.structure_datasets import UnitcellDataset
+
+# These classes are wrangling the Alexandria phonon dataset. The ingest the yaml data files, and create from them the objects to subsequently use in the training data creation.
 
 
 @dataclass
@@ -187,7 +189,7 @@ class PhononData:
         data = open_data(mp_id)
 
         unitcell = Unitcell.from_alexandria(mp_id)
-        print(f"Ref Vol{unitcell.to_ase_atoms().get_volume()}ö")
+        print(f"Ref Vol{unitcell.to_ase_atoms().get_volume()}")
         phonon = unitcell.to_phonopy()
 
         phonon.dataset = get_displacement_dataset_from_alexandria_data_dict(data)
@@ -230,7 +232,7 @@ class PhononDataset:
         return cls(phonon_data_samples=phonon_data_samples)
 
     def to_hdf5():
-        pass
+        raise NotImplementedError
 
     @classmethod
     def compute_phonon_dataset_from_unit_cell_dataset(

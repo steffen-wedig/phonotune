@@ -1,12 +1,12 @@
-from phonotune.alexandria.configuration_data import (
-    ConfigFactory,
-    ConfigSingleDataset,
-)
-from phonotune.alexandria.phonon_data import PhononDataset
 from phonotune.configuration import Configuration
 from phonotune.materials_iterator import (
     FileMaterialsIterator,
 )
+from phonotune.phonon_data.configuration_data import (
+    ConfigFactory,
+    ConfigSingleDataset,
+)
+from phonotune.phonon_data.phonon_data import PhononDataset
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
 

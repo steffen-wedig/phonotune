@@ -3,14 +3,14 @@ from phonotune.materials_iterator import (
 )
 from phonotune.structure_utils import get_spinel_group_mpids
 
+# Script that finds the aluminium oxide dataset from the materials project
+
+
 mat_iterator = FileMaterialsIterator(
     "/data/fast-pc-06/snw30/projects/phonons/phonotune/data/alexandira_ph_mpids.txt"
 )
 
 spinels, formulas, elements = get_spinel_group_mpids(mat_iterator)
-print(elements)
-# print(formulas)
-breakpoint()
 
 spinel_mpids = [i.string for i in spinels]
 

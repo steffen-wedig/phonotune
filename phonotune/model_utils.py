@@ -2,6 +2,7 @@ import torch
 from mace.calculators import MACECalculator
 
 
+# Taken from Lars' MACE PR https://github.com/ACEsuit/mace/pull/845
 def update_weights_from_checkpoint(mace_calculator: MACECalculator, checkpoint_path):
     """
     Updates the model's weights from a given checkpoint file.

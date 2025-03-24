@@ -1,13 +1,13 @@
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.configuration_data import ConfigSequenceDataset
-from phonotune.alexandria.phonon_data import PhononDataset
-from phonotune.alexandria.structure_datasets import UnitcellDataset
 from phonotune.evaluation.phonon_benchmark import (
     PhononBenchmark,
     calculate_validation_loss,
 )
 from phonotune.materials_iterator import ListMaterialsIterator
+from phonotune.phonon_data.configuration_data import ConfigSequenceDataset
+from phonotune.phonon_data.phonon_data import PhononDataset
+from phonotune.phonon_data.structure_datasets import UnitcellDataset
 
 MACE_MODELS_ROOT = "/data/fast-pc-06/snw30/projects/models"
 

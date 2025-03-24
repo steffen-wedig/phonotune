@@ -1,41 +1,13 @@
-import matplotlib.pyplot as plt
 import yaml
 from ase import Atoms
 from ase.calculators.calculator import Calculator
 from ase.filters import FrechetCellFilter
 from ase.optimize import FIRE, LBFGS
-from ase.visualize.plot import plot_atoms
-from pymatgen.core import Lattice, Structure
 from pymatgen.ext.matproj import MPRester
 from pymatgen.io.ase import AseAtomsAdaptor
 
 from phonotune.configuration import Configuration
 from phonotune.materials_iterator import MaterialsIterator
-
-
-def get_low_T_Ru2Sn3_structure():
-    a = 12.344
-    b = 9.922
-    c = 6.161
-
-    alpha = 90
-    beta = 90
-    gamma = 90
-    coords = [
-        [1, 0.5696, 0.75],
-        [0.7491, 0.3121, 0.2424],
-        [0.5, 0.4466, 0.25],
-        [0.6608, 0.5760, 0.0794],
-        [0.8573, 0.5909, 0.4094],
-        [0.5766, 0.7351, 0.4828],
-    ]
-
-    lattice = Lattice.from_parameters(a, b, c, alpha, beta, gamma)
-    struct = Structure.from_spacegroup(
-        "Pbcn", lattice, ["Ru", "Ru", "Ru", "Sn", "Sn", "Sn"], coords
-    )
-
-    return struct
 
 
 def get_from_mp(material_id):
@@ -47,13 +19,6 @@ def get_from_mp(material_id):
         # Structure for material id
         structure = m.get_structure_by_material_id(material_id)
     return structure
-
-
-def plot_low_T(struct):
-    ase_atoms = to_ase(struct)
-    fig, ax = plt.subplots()
-    plot_atoms(ase_atoms, ax, radii=0.5, rotation=("90x,0y,0z"))
-    return fig
 
 
 def to_ase(struct) -> Atoms:

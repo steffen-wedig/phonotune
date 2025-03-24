@@ -4,14 +4,17 @@ from mace.modules.loss import force_difference_mse_error
 from mace.tools import get_atomic_number_table_from_zs
 from mace.tools.torch_geometric.dataloader import DataLoader
 
-from phonotune.alexandria.configuration_data import (
+from phonotune.configuration import Configuration
+from phonotune.phonon_data.configuration_data import (
     ConfigFactory,
     ConfigSequenceDataset,
 )
-from phonotune.alexandria.phonon_data import PhononData
-from phonotune.configuration import Configuration
+from phonotune.phonon_data.phonon_data import PhononData
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
+
+
+# This script requires code that is only present in the unmerged mace fork on https://github.com/steffen-wedig/mace/refactor_data
 
 
 def main():

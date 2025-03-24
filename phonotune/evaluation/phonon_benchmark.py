@@ -4,10 +4,10 @@ import yaml
 from mace.calculators import MACECalculator
 from matplotlib.figure import Figure
 
-from phonotune.alexandria.data_utils import serialization_dict_type_conversion
-from phonotune.alexandria.phonon_data import PhononData, PhononDataset
-from phonotune.alexandria.structure_datasets import UnitcellDataset
 from phonotune.materials_iterator import ListMaterialsIterator
+from phonotune.phonon_data.data_utils import serialization_dict_type_conversion
+from phonotune.phonon_data.phonon_data import PhononData, PhononDataset
+from phonotune.phonon_data.structure_datasets import UnitcellDataset
 from phonotune.structure_utils import convert_configuration_to_ase
 
 

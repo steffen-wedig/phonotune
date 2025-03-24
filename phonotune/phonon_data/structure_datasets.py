@@ -8,14 +8,16 @@ from ase.symbols import symbols2numbers
 from mace.calculators import MACECalculator
 from tqdm import tqdm
 
-from phonotune.alexandria.crystal_structures import Supercell, Unitcell
-from phonotune.alexandria.data_utils import (
+from phonotune.materials_iterator import ListMaterialsIterator
+from phonotune.phonon_data.data_utils import (
     contains_non_mace_elements,
     is_unstable_lattice,
     open_data,
 )
-from phonotune.materials_iterator import ListMaterialsIterator
+from phonotune.phonon_data.equilibrium_structure import Supercell, Unitcell
 from phonotune.structure_utils import unitcell_fire_relaxation
+
+# These classes collect supercell objects and allow simpler operations on the collection of data.
 
 
 @dataclass

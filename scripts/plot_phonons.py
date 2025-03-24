@@ -4,7 +4,7 @@ from mace.calculators import MACECalculator
 from phonotune.phonon_calculation.plotting_bands import (
     plot_model_reference_phonon_comparison,
 )
-from phonotune.phonon_data.crystal_structures import Unitcell
+from phonotune.phonon_data.equilibrium_structure import Unitcell
 from phonotune.phonon_data.phonon_data import PhononData
 from phonotune.structure_utils import unitcell_fire_relaxation
 

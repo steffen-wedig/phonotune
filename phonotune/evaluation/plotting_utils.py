@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.figure import Figure
 
+from phonotune.evaluation.low_dim_projection import get_embedding
 from phonotune.evaluation.training_evaluation import ModelTrainingRun
 
 plt.rcParams.update(
@@ -24,7 +25,9 @@ plt.rcParams.update(
 
 
 def plot_validation_loss_curves_over_epoch(
-    noreplay_runs: Sequence[ModelTrainingRun], replay_runs: Sequence[ModelTrainingRun]
+    noreplay_runs: Sequence[ModelTrainingRun],
+    replay_runs: Sequence[ModelTrainingRun],
+    no_weight_decay_runs: Sequence[ModelTrainingRun],
 ) -> Figure:
     replay_orig_cmap = plt.cm.Blues
     cNorm = matplotlib.colors.LogNorm(vmin=5, vmax=2000)
@@ -32,6 +35,11 @@ def plot_validation_loss_curves_over_epoch(
 
     noreplay_orig_cmap = plt.cm.Oranges
     noreplay_scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=noreplay_orig_cmap)
+
+    no_weight_decay_cmap = plt.cm.Greens
+    no_weight_decay_scalarMap = cmx.ScalarMappable(
+        norm=cNorm, cmap=no_weight_decay_cmap
+    )
 
     fig, ax = plt.subplots(figsize=(4, 4))
 
@@ -61,6 +69,18 @@ def plot_validation_loss_curves_over_epoch(
             epochs, val_loss, "-x", color=colorVal, label=f"Replay, N = {tr.N_samples}"
         )
 
+    for _, tr in enumerate(no_weight_decay_runs):
+        epochs = np.arange(0, len(tr.validation_loss))
+        val_loss = np.array([tr.validation_loss[ep] for ep in epochs])
+        colorVal = no_weight_decay_scalarMap.to_rgba(tr.N_samples)
+        ax.plot(
+            epochs,
+            val_loss,
+            "-x",
+            color=colorVal,
+            label=f"No WD, N = {tr.N_samples}",
+        )
+
     # Formatting
     max_epochs = max(epochs)
     ax.set_xlim(left=0, right=max_epochs)
@@ -86,13 +106,10 @@ def plot_forgetting_loss(
     noreplay_orig_cmap = plt.cm.Oranges
     noreplay_scalarMap = cmx.ScalarMappable(norm=cNorm, cmap=noreplay_orig_cmap)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-
-    print(no_replay_forgetting_data.items())
+    fig, ax = plt.subplots(figsize=(6, 3.75))
 
     # Plot fine-tuning without replay
     for N_samples, loss_dict in no_replay_forgetting_data.items():
-        print(loss_dict.keys())
         epochs = [epoch for epoch in loss_dict.keys()]
         forget_loss = [loss_val for loss_val in loss_dict.values()]
 
@@ -105,17 +122,17 @@ def plot_forgetting_loss(
         sort_idx = np.argsort(epochs)
         epochs = epochs[sort_idx]
         forget_loss = forget_loss[sort_idx]
-        print(N_samples)
-        print(epochs)
-        print(forget_loss)
+
         colorVal = noreplay_scalarMap.to_rgba(N_samples)
         ax.plot(
             epochs,
             forget_loss,
-            "-x",
+            "-",
             color=colorVal,
             label=f"No replay, N = {N_samples}",
         )
+
+    ######
 
     for N_samples, loss_dict in replay_forgetting_data.items():
         epochs = [epoch for epoch in loss_dict.keys()]
@@ -133,8 +150,73 @@ def plot_forgetting_loss(
         colorVal = replay_scalarMap.to_rgba(N_samples)
 
         ax.plot(
-            epochs, forget_loss, "-x", color=colorVal, label=f"Replay, N = {N_samples}"
+            epochs, forget_loss, "-", color=colorVal, label=f"Replay, N = {N_samples}"
         )
+
+    max_epochs = max(epochs)
+    ax.set_xlim(left=0, right=max_epochs)
+    ax.set_xlabel("Epoch Number")
+    ax.set_ylabel(r"Forgetting Test Loss Force RMSE ($\mathrm{meV/\AA}$)")
+    # ax.set_title("Finetuning Forgetting Loss Over Epochs", fontsize=16)
+
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+
+    # Put a legend to the right of the current axis
+
+    ax.legend(loc="center left", frameon=False, bbox_to_anchor=(1, 0.5))
+    ax.set_xticks(np.linspace(0, max_epochs, int(max_epochs / 5) + 1, dtype=int))
+
+    return fig
+
+
+def plot_forgetting_loss_weight_decay(
+    no_replay_forgetting_data, initial_test_set_loss, no_weight_decay_forgetting_data
+) -> Figure:
+    wd_to_color = {0.0: "black", 2.5e-7: "darkgreen", 5e-7: "lime", 1e-6: "aqua"}
+
+    fig, ax = plt.subplots(figsize=(6, 3.75))
+
+    no_replay_forgetting_data = dict(
+        (k, no_replay_forgetting_data[k]) for k in (100, 2000)
+    )
+
+    no_weight_decay_forgetting_data[100].append({5e-7: no_replay_forgetting_data[100]})
+
+    no_weight_decay_forgetting_data[2000].append(
+        {5e-7: no_replay_forgetting_data[2000]}
+    )
+
+    for N_samples, wd_list in no_weight_decay_forgetting_data.items():
+        data = {key: value for i in wd_list for key, value in i.items()}
+        data = {key: data[key] for key in sorted(data)}
+
+        for weight_decay, loss_dict in data.items():
+            epochs = [epoch for epoch in loss_dict.keys()]
+            forget_loss = [loss_val for loss_val in loss_dict.values()]
+            epochs.append(0)
+            forget_loss.append(initial_test_set_loss)
+
+            epochs = np.array(epochs)
+            forget_loss = np.array(forget_loss)
+
+            sort_idx = np.argsort(epochs)
+            epochs = epochs[sort_idx]
+            forget_loss = forget_loss[sort_idx]
+
+            if N_samples == 2000:
+                ticks = "-"
+
+            elif N_samples == 100:
+                ticks = "--"
+
+            ax.plot(
+                epochs,
+                forget_loss,
+                ticks,
+                color=wd_to_color[weight_decay],
+                label=f"WD = {weight_decay:.2e} N = {N_samples}",
+            )
 
     max_epochs = max(epochs)
     ax.set_xlim(left=0, right=max_epochs)
@@ -260,4 +342,38 @@ def plot_thermodynamic_property_errors(
             linestyle="--",
         )
 
+    return fig
+
+
+def plot_umap_projection(formulas_subsets, names, reducer, embedding_method):
+    fig = plt.figure(figsize=(3, 3))
+
+    for formulas, label in zip(formulas_subsets, names, strict=False):
+        if label == "Test ID":
+            continue
+        embeddings = get_embedding(formulas, embedding_method)
+
+        reduced_embeddings = reducer.transform(embeddings)
+        print(reduced_embeddings.shape)
+        plt.scatter(
+            reduced_embeddings[:, 0],
+            reduced_embeddings[:, 1],
+            label=label,
+            s=30,
+            alpha=0.7,
+        )
+
+    plt.legend()
+    plt.xticks([], [])
+    plt.yticks([], [])
+
+    plt.tick_params(
+        top="off",
+        bottom="off",
+        left="off",
+        right="off",
+        labelleft="off",
+        labelbottom="on",
+    )
+    plt.tight_layout()
     return fig

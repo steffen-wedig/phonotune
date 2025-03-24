@@ -9,6 +9,15 @@ import yaml
 from phonotune.materials_iterator import MaterialsIterator
 
 
+def get_mp_api_key():
+    yaml_file = "./api_key.yaml"
+
+    with open(yaml_file) as f:
+        api_key = yaml.safe_load(f)["MP_API_KEY"]
+
+    return api_key
+
+
 def download_and_unpack_phonons(mp_id):
     url = f"https://alexandria.icams.rub.de/data/phonon_benchmark/pbe/{mp_id}.yaml.bz2"
     response = requests.get(url)

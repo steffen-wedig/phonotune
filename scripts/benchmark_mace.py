@@ -1,9 +1,11 @@
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.phonon_data import PhononDataset
-from phonotune.alexandria.structure_datasets import UnitcellDataset
 from phonotune.evaluation.phonon_benchmark import PhononBenchmark
 from phonotune.materials_iterator import FileMaterialsIterator
+from phonotune.phonon_data.phonon_data import PhononDataset
+from phonotune.phonon_data.structure_datasets import UnitcellDataset
+
+# A script that calculates the performance of different mace models on thermodynamic property calculation from phonons.
 
 MACE_MODELS_ROOT = "/data/fast-pc-04/snw30/projects/mace_models"
 

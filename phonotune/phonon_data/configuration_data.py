@@ -4,14 +4,18 @@ from collections.abc import Sequence
 
 import h5py
 import numpy as np
+from ase import Atoms
 from ase.io.extxyz import write_extxyz
 from ase.symbols import symbols2numbers
 
-from phonotune.alexandria.phonon_data import Displacement, PhononData
 from phonotune.configuration import Configuration
+from phonotune.phonon_data.phonon_data import Displacement, PhononData
 from phonotune.structure_utils import convert_configuration_to_ase
 
 type ConfigurationPairs = list[tuple[Configuration, Configuration]]
+
+
+# These classes produce the configurations. The configurations are the full crystal structure with single displacements. The configurations are created by combining displacement data read from a phonon data object, and the equilibrium structure. Equilibrium Structure (Supercell Object) + Displacement = Configuration. Configuration objects also contain the reference data. They align with mace.data.utils.Configuration
 
 
 class ConfigFactory:
@@ -128,6 +132,7 @@ class ConfigFactory:
         equilibrium_structure, atom_symbols, displacement: Displacement
     ) -> Configuration:
         position = equilibrium_structure.copy()
+
         position[displacement.atom, :] += displacement.displacement
 
         config = ConfigFactory.get_mace_configuration(
@@ -228,12 +233,7 @@ class ConfigSingleDataset:
         return ConfigSingleDataset(training_data), ConfigSingleDataset(validation_data)
 
     def to_xyz(self, xyz_file_path: str):
-        ase_atoms = []
-
-        for config in self.data:
-            atoms = convert_configuration_to_ase(config)
-            ase_atoms.append(atoms)
-
+        ase_atoms = self.to_ase()
         f = open(xyz_file_path, "w")
         write_extxyz(
             f,
@@ -241,6 +241,15 @@ class ConfigSingleDataset:
             columns=["symbols", "positions", "DFT_forces"],
             write_info=True,
         )
+
+    def to_ase(self) -> list[Atoms]:
+        ase_atoms = []
+
+        for config in self.data:
+            atoms = convert_configuration_to_ase(config)
+            ase_atoms.append(atoms)
+
+        return ase_atoms
 
     def to_hdf5(self, h5_file):
         # This creates hdf5 files based on the hdf5 layout of the mace/refactor_data branch

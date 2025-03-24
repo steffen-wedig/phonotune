@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 
+# Classes to iterate over collections of mp-id.
+
 
 class MaterialsIterator(ABC):
     @abstractmethod
