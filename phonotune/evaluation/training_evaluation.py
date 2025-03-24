@@ -4,14 +4,19 @@ from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
+from ase import Atoms
 from mace.calculators import MACECalculator
 
-from phonotune.alexandria.configuration_data import ConfigSingleDataset
-from phonotune.evaluation.eval_utils import get_model_name_epoch_from_checkpoint_path
+from phonotune.evaluation.eval_utils import (
+    extract_weight_decay,
+    get_model_name_epoch_from_checkpoint_path,
+)
 from phonotune.evaluation.phonon_benchmark import (
     PhononBenchmark,
 )
 from phonotune.model_utils import update_weights_from_checkpoint
+from phonotune.phonon_data.configuration_data import ConfigSingleDataset
+from phonotune.phonon_data.phonon_data import Displacement
 from phonotune.structure_utils import convert_configuration_to_ase
 
 type TrainingType = Literal["finetune_replay", "finetune_noreplay", "scratch"]
@@ -22,6 +27,7 @@ class ModelTrainingRun:
         self.model_name: str = model_name
         self.directory: str = directory
         self.trainig_type: TrainingType | None = training_type
+
         self.max_epochs = None
         self.checkpoint_paths: dict[int:str] = self.get_checkpoints()
 
@@ -37,11 +43,21 @@ class ModelTrainingRun:
 
         for model_path in paths:
             if "compiled" not in model_path:
-                print(model_path)
                 return model_path
 
+    def get_mace_calculator(self) -> MACECalculator:
+        calc = MACECalculator(
+            self.model_file, device="cuda", enable_cueq=True, default_dtype="float64"
+        )
+
+        self.calc = calc
+        return calc
+
     def get_training_type(self):
-        if "finetune" in self.model_name:
+        if "weight_decay" in self.model_name:
+            self.trainig_type = "weight_decay"
+            self.weight_decay = extract_weight_decay(self.model_name)
+        elif "finetune" in self.model_name:
             if "replay" in self.model_name:
                 self.trainig_type = "finetune_replay"
             else:
@@ -184,3 +200,67 @@ class ModelTrainingRun:
         self.phonon_evaluation = comp
 
         return td_mae_dict, phonon_mse
+
+
+def get_configurations_across_linear_displacement(
+    atoms: Atoms, displacement: Displacement, N_displacements: int
+) -> Sequence[np.ndarray, list[Atoms]]:
+    displaced_atoms = displacement.atom
+    displacement_fractions = np.linspace(-5, 5, N_displacements)
+    displacement_vector = displacement.displacement
+
+    displacement_vectors = displacement_fractions[:, np.newaxis] * displacement_vector
+
+    structures = []
+
+    for disp in displacement_vectors:
+        new_atoms = atoms.copy()
+        pos = new_atoms.get_positions()
+        pos[displaced_atoms, :] += disp
+        new_atoms.set_positions(pos)
+        structures.append(new_atoms)
+
+    displacement_magnitudes = displacement_fractions * np.linalg.norm(
+        displacement_vector
+    )
+
+    print([s.get_positions()[0, :] for s in structures])
+    return displacement_magnitudes, structures
+
+
+def get_configurations_across_orthogonal_displacement(
+    atoms: Atoms, displacement: Displacement, N_displacements: int
+) -> Sequence[np.ndarray, list[Atoms]]:
+    displaced_atoms = displacement.atom
+    displacement_fractions = np.linspace(-1.5, 1.5, N_displacements)
+    displacement_vector = displacement.displacement
+
+    w = np.random.randn(len(displacement_vector))
+
+    # Step 2: Subtract off the component of w along displacement_vector
+    w_perp = (
+        w
+        - (
+            np.dot(w, displacement_vector)
+            / np.dot(displacement_vector, displacement_vector)
+        )
+        * displacement_vector
+    )
+
+    displacement_vectors = displacement_fractions[:, np.newaxis] * w_perp
+
+    structures = []
+
+    for disp in displacement_vectors:
+        new_atoms = atoms.copy()
+        pos = new_atoms.get_positions()
+        pos[displaced_atoms, :] += disp
+        new_atoms.set_positions(pos)
+        structures.append(new_atoms)
+
+    displacement_magnitudes = displacement_fractions * np.linalg.norm(
+        displacement_vector
+    )
+
+    print([s.get_positions()[0, :] for s in structures])
+    return displacement_magnitudes, structures

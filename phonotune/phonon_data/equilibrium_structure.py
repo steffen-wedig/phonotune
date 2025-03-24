@@ -3,7 +3,9 @@ from ase import Atoms
 from phonopy.api_phonopy import Phonopy
 from phonopy.structure.atoms import PhonopyAtoms
 
-from phonotune.alexandria.data_utils import open_data, unpack_points
+from phonotune.phonon_data.data_utils import open_data, unpack_points
+
+# This file contains the cell classes, which represent the data on the equilibrium structure of the materials in the
 
 
 class Cell:
@@ -85,6 +87,9 @@ class Unitcell(Cell):
             primitive_matrix=self.primitive_matrix,
             symprec=1e-5,
         )
+
+    def to_ase_atoms(self):
+        return super().to_ase_atoms()
 
 
 class Supercell(Cell):
